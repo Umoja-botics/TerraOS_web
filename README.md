@@ -67,6 +67,25 @@ Le fichier `render.yaml` décrit un Web Service `terraos-api` et une base Postgr
 
 `TYPEORM_SYNCHRONIZE=true` est activé dans le Blueprint pour créer les tables au premier déploiement. Pour une prod durable, remplace-le ensuite par des migrations et repasse cette variable à `false`.
 
+### Bridge extérieur pour Render/Vercel
+
+Si tu veux que Vercel et Render commandent un bridge qui tourne sur ta machine, lance le bridge avec le backend Render comme API distant.
+
+1. Sur ta machine locale, dans `TerraOS_web/apps/bridge` :
+   ```bash
+   ./launch-external.sh api_url=https://terraos-api-jdxg.onrender.com mqtt=true mqtt_host=localhost
+   ```
+
+2. Dans l’API et l’application, enregistre le robot avec :
+   - `bridgeUrl = http://<IP_PUBLIQUE_OU_LOCALE>:8100`
+
+3. Si tu veux exposer le bridge sur le réseau local, utilise par exemple :
+   - `bridgeUrl = http://192.168.1.79:8100`
+
+4. Sur Render, si tu peux exposer ton bridge publiquement, définis aussi `BRIDGE_BASE_URL=https://<URL_DU_BRIDGE>`.
+
+> Important : Render ne peut pas appeler `http://localhost:8100` sur ta machine locale. Le bridge doit être accessible depuis Render via une IP ou un nom de domaine reachable.
+
 Si tu dois créer le premier compte admin en production, mets temporairement `ALLOW_SEED_ADMIN=true` dans Render, appelle `POST /api/v1/seed/admin`, puis remets la variable à `false`.
 
 ### Liaison frontend/backend

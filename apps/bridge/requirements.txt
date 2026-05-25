@@ -1,0 +1,8 @@
+# terra-bridge dependencies
+# rclpy comes from the ROS2 installation — NOT pip-installable
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+httpx>=0.27.0
+pydantic>=2.0.0
+pyyaml>=6.0
+paho-mqtt>=2.0.0   # MQTT transport (USE_MQTT=true mode)

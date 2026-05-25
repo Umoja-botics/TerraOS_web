@@ -18,10 +18,10 @@ export class MissionEntity {
   @Column({ type: 'varchar', default: MissionStatus.IDLE })
   status: MissionStatus;
 
-  @Column({ nullable: true, type: 'datetime' })
+  @Column({ nullable: true, type: Date })
   startedAt: Date | null;
 
-  @Column({ nullable: true, type: 'datetime' })
+  @Column({ nullable: true, type: Date })
   endedAt: Date | null;
 
   @Column({ nullable: true, type: 'varchar' })

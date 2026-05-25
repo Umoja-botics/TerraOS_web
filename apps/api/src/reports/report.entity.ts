@@ -18,10 +18,10 @@ export class ReportEntity {
   @Column({ nullable: true })
   navMode: string;
 
-  @Column({ nullable: true, type: 'datetime' })
+  @Column({ nullable: true, type: Date })
   startedAt: Date | null;
 
-  @Column({ nullable: true, type: 'datetime' })
+  @Column({ nullable: true, type: Date })
   endedAt: Date | null;
 
   @Column({ type: 'float', default: 0 })

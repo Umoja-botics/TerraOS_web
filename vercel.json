@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
-  "installCommand": "npm install -g pnpm@9.15.9 && pnpm install --frozen-lockfile",
+  "installCommand": "npm install -g pnpm@9.15.9 && pnpm install --frozen-lockfile --prod=false",
   "buildCommand": "pnpm --filter @terra-os/web... build",
   "outputDirectory": "apps/web/dist",
   "rewrites": [

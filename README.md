@@ -44,7 +44,7 @@ Web apps for TerraOS.
 
 Le fichier `vercel.json` à la racine configure déjà le projet Vite :
 
-- Install Command : `npm install -g pnpm@9.15.9 && pnpm install --frozen-lockfile`
+- Install Command : `npm install -g pnpm@9.15.9 && pnpm install --frozen-lockfile --prod=false`
 - Build Command : `pnpm --filter @terra-os/web... build`
 - Output Directory : `apps/web/dist`
 

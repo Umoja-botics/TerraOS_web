@@ -3,7 +3,7 @@ services:
     name: terraos-api
     runtime: node
     plan: free
-    buildCommand: npm install -g pnpm@9.15.9 && pnpm install --frozen-lockfile && pnpm --filter @terra-os/api... build
+    buildCommand: npm install -g pnpm@9.15.9 && pnpm install --frozen-lockfile --prod=false && pnpm --filter @terra-os/api... build
     startCommand: pnpm --filter @terra-os/api start
     healthCheckPath: /api/v1/health
     envVars:

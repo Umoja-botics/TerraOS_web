@@ -53,6 +53,8 @@ Dans Vercel, crée un projet depuis le dépôt GitHub, garde la racine du repo c
 - `VITE_API_URL=https://<URL_DE_TON_BACKEND>`
 - `VITE_SOCKET_URL=https://<URL_DE_TON_BACKEND>`
 
+Tu peux aussi définir ces valeurs dans `apps/web/.env.production` pour que la build Vite utilise le bon backend en production.
+
 ### Backend sur Render
 
 Le fichier `render.yaml` décrit un Web Service `terraos-api` et une base PostgreSQL `terraos-db`.

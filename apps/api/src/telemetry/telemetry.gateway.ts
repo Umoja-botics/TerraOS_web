@@ -27,16 +27,12 @@ import type {
 import { Role } from '@terra-os/types';
 import { RobotsService } from '../robots/robots.service';
 import { UsersService } from '../users/users.service';
+import { checkWebOrigin } from '../config/cors';
 
 @WebSocketGateway({
   namespace: '/robots',
   cors: {
-    // Use a function so process.env.WEB_URL is read at request time (after ConfigModule loads .env),
-    // not at class-decoration time when the env file hasn't been parsed yet.
-    origin: (origin: string, cb: (err: Error | null, allow?: boolean) => void) => {
-      const allowed = process.env.WEB_URL ?? 'http://localhost:3001';
-      cb(null, !origin || origin === allowed);
-    },
+    origin: checkWebOrigin,
     credentials: true,
   },
 })

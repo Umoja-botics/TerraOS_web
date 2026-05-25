@@ -1,6 +1,7 @@
 {
   "name": "terra-os",
   "private": true,
+  "packageManager": "pnpm@9.15.9",
   "scripts": {
     "dev": "pnpm --parallel -r run dev",
     "dev:api": "pnpm --filter @terra-os/api run dev",

@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: terraos-api
+    runtime: node
+    plan: free
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @terra-os/api... build
+    startCommand: pnpm --filter @terra-os/api start
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20.14.0
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: WEB_URL
+        sync: false
+      - key: BRIDGE_BASE_URL
+        sync: false
+      - key: TYPEORM_SYNCHRONIZE
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: terraos-db
+          property: connectionString
+
+databases:
+  - name: terraos-db
+    plan: free
+    databaseName: terraos
+    user: terraos

@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { TypeOrmModule, type TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { RobotsModule } from './robots/robots.module';
@@ -17,15 +17,29 @@ import { HealthModule } from './health/health.module';
 
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
+      useFactory: (config: ConfigService): TypeOrmModuleOptions => {
         const dbUrl = config.get<string>('DATABASE_URL');
         const isSqlite = !dbUrl || dbUrl.startsWith('sqlite');
         const sqliteFile = dbUrl?.replace(/^sqlite:/, '') ?? 'terraos.sqlite';
+        const synchronize = config.get<string>('TYPEORM_SYNCHRONIZE');
+        const useSsl = config.get<string>('DATABASE_SSL') === 'true';
+        const shouldSynchronize = synchronize ? synchronize === 'true' : process.env.NODE_ENV !== 'production';
+
+        if (isSqlite) {
+          return {
+            type: 'sqlite',
+            database: sqliteFile,
+            autoLoadEntities: true,
+            synchronize: shouldSynchronize,
+          };
+        }
+
         return {
-          type: isSqlite ? 'sqlite' : 'postgres',
-          ...(isSqlite ? { database: sqliteFile } : { url: dbUrl }),
+          type: 'postgres',
+          url: dbUrl,
+          ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
           autoLoadEntities: true,
-          synchronize: process.env.NODE_ENV !== 'production',
+          synchronize: shouldSynchronize,
         };
       },
     }),

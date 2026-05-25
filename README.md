@@ -42,29 +42,30 @@ Web apps for TerraOS.
 
 ### Frontend sur Vercel
 
-1. Crée un projet Vercel depuis ton dépôt GitHub.
-2. Défini le "Root Directory" sur `TerraOS_web` si nécessaire.
-3. Configure l’installation et le build :
-   - Install Command : `pnpm install`
-   - Build Command : `pnpm --filter @terra-os/web build`
-   - Output Directory : `apps/web/dist`
-4. Ajoute les variables d’environnement :
-   - `VITE_API_URL=https://<URL_DE_TON_BACKEND>`
-   - `VITE_SOCKET_URL=https://<URL_DE_TON_BACKEND>`
+Le fichier `vercel.json` à la racine configure déjà le projet Vite :
+
+- Install Command : `corepack enable && pnpm install --frozen-lockfile`
+- Build Command : `pnpm --filter @terra-os/web... build`
+- Output Directory : `apps/web/dist`
+
+Dans Vercel, crée un projet depuis le dépôt GitHub, garde la racine du repo comme Root Directory, puis ajoute :
+
+- `VITE_API_URL=https://<URL_DE_TON_BACKEND>`
+- `VITE_SOCKET_URL=https://<URL_DE_TON_BACKEND>`
 
 ### Backend sur Render
 
-1. Crée un service Web sur Render depuis ton dépôt GitHub.
-2. Utilise comme racine de projet : `TerraOS_web/apps/api`.
-3. Configure le build et le démarrage :
-   - Build Command : `pnpm --filter @terra-os/api build`
-   - Start Command : `pnpm --filter @terra-os/api start`
-4. Ajoute les variables d’environnement :
-   - `WEB_URL=https://<URL_DE_TON_FRONTEND>`
-   - `JWT_SECRET=change-moi-en-prod`
-   - `DATABASE_URL=<postgresql://...>` si tu veux une DB persistante
+Le fichier `render.yaml` décrit un Web Service `terraos-api` et une base PostgreSQL `terraos-db`.
 
-> Si tu n’as pas de base de données PostgreSQL, Render peut démarrer avec SQLite, mais la persistance peut être limitée sur un plan gratuit.
+1. Dans Render, crée un Blueprint depuis le dépôt GitHub.
+2. Render lit `render.yaml`, crée l’API et renseigne `DATABASE_URL` depuis la base Postgres.
+3. Au premier déploiement, renseigne :
+   - `WEB_URL=https://<URL_DE_TON_FRONTEND_VERCEL>`
+   - `BRIDGE_BASE_URL=https://<URL_DU_BRIDGE>` si le bridge est exposé publiquement
+
+`TYPEORM_SYNCHRONIZE=true` est activé dans le Blueprint pour créer les tables au premier déploiement. Pour une prod durable, remplace-le ensuite par des migrations et repasse cette variable à `false`.
+
+Si tu dois créer le premier compte admin en production, mets temporairement `ALLOW_SEED_ADMIN=true` dans Render, appelle `POST /api/v1/seed/admin`, puis remets la variable à `false`.
 
 ### Liaison frontend/backend
 

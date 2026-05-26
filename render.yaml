@@ -19,12 +19,29 @@ services:
         sync: false
       - key: BRIDGE_BASE_URL
         sync: false
+      - key: SIM_BRIDGE_URL
+        sync: false
       - key: TYPEORM_SYNCHRONIZE
         value: "true"
       - key: DATABASE_URL
         fromDatabase:
           name: terraos-db
           property: connectionString
+
+  - type: web
+    name: terraos-sim
+    runtime: python
+    plan: free
+    buildCommand: pip install -r apps/bridge/requirements.txt
+    startCommand: cd apps/bridge && uvicorn sim_bridge:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: ROBOT_ID
+        value: "00000000-0000-0000-0000-000000000001"
+      - key: TERRA_API_URL
+        sync: false
 
 databases:
   - name: terraos-db

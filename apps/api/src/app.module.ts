@@ -10,6 +10,7 @@ import { ReportsModule } from './reports/reports.module';
 import { TelemetryModule } from './telemetry/telemetry.module';
 import { PluginsModule } from './plugins/plugins.module';
 import { HealthModule } from './health/health.module';
+import { SimSeedModule } from './sim-seed/sim-seed.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { HealthModule } from './health/health.module';
     TelemetryModule,
     PluginsModule,
     HealthModule,
+    SimSeedModule,
   ],
 })
 export class AppModule {}

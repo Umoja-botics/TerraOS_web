@@ -12,10 +12,13 @@ import type { RobotLive } from '@/types/fleet';
 
 const EVENT_LOG_MAX = 100;
 
+export const SIM_ROBOT_ID = '00000000-0000-0000-0000-000000000001';
+
 interface FleetState {
   robots: Record<string, RobotLive>;
   selectedRobotId: string | null;
   socket: Socket | null;
+  simMode: boolean;
   updateStatus:      (event: RobotStatusEvent) => void;
   updateTelemetry:   (event: RobotTelemetryEvent) => void;
   updateMission:     (event: MissionUpdateEvent) => void;
@@ -24,6 +27,7 @@ interface FleetState {
   addEvent:          (event: RobotEventPayload) => void;
   selectRobot:       (id: string | null) => void;
   setSocket:         (socket: Socket | null) => void;
+  toggleSimMode:     () => void;
 }
 
 const empty = (): RobotLive => ({
@@ -36,12 +40,27 @@ const empty = (): RobotLive => ({
   agentTelemetry: {},
 });
 
-export const useFleetStore = create<FleetState>()((set) => ({
+export const useFleetStore = create<FleetState>()((set, get) => ({
   robots: {},
   selectedRobotId: null,
   socket: null,
+  simMode: false,
 
   setSocket: (socket) => set({ socket }),
+
+  toggleSimMode: () => {
+    const { simMode, selectedRobotId, socket } = get();
+    const next = !simMode;
+    if (next) {
+      // Entering sim mode: subscribe to sim robot room
+      if (socket) socket.emit('robot:subscribe', { robotId: SIM_ROBOT_ID });
+      set({ simMode: true, selectedRobotId: SIM_ROBOT_ID });
+    } else {
+      // Leaving sim mode: unsubscribe and clear selection if it was the sim
+      if (socket) socket.emit('robot:unsubscribe', { robotId: SIM_ROBOT_ID });
+      set({ simMode: false, selectedRobotId: selectedRobotId === SIM_ROBOT_ID ? null : selectedRobotId });
+    }
+  },
 
   updateStatus: (event) =>
     set((s) => {

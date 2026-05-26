@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 import { useMissionStore, type MissionPhase } from '@/store/missionStore';
-import { useFleetStore } from '@/store/fleetStore';
+import { useFleetStore, SIM_ROBOT_ID } from '@/store/fleetStore';
 import {
   useMissions,
   useStartMission,
@@ -61,6 +61,7 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
     useMissionStore();
   // Use the run's ID (clone) for lifecycle calls once a run is active
   const activeId = runId ?? profile?.id ?? null;
+  const simMode = useFleetStore((s) => s.simMode);
   const agents = useFleetStore((s) => robotId ? (s.robots[robotId]?.agents ?? {}) : {});
   const ugvMission = useFleetStore((s) => robotId ? (s.robots[robotId]?.mission ?? null) : null);
   const robotMode = useFleetStore((s) => robotId ? ((s.robots[robotId]?.status as unknown as Record<string, unknown>)?.mode as string ?? null) : null);
@@ -75,6 +76,13 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
   // Fetch IDLE profiles for this robot
   const { data: allMissions = [] } = useMissions(robotId ?? undefined);
   const idleProfiles = allMissions.filter((m) => m.status === MissionStatus.IDLE);
+
+  // ── Auto-select sim mission when sim mode activates ───────────────────────
+  useEffect(() => {
+    if (simMode && robotId === SIM_ROBOT_ID && phase === 'IDLE' && idleProfiles.length > 0 && !profile) {
+      loadFromMission(idleProfiles[0]);
+    }
+  }, [simMode, robotId, idleProfiles.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startMission  = useStartMission();
   const pauseMission  = usePauseMission();

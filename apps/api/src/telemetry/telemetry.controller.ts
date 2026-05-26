@@ -3,6 +3,8 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { TelemetryGateway } from './telemetry.gateway';
 import { Public } from '../common/decorators/public.decorator';
 import { MissionsService } from '../missions/missions.service';
+import { RobotsService } from '../robots/robots.service';
+import { RobotStatus } from '@terra-os/types';
 import type {
   RobotTelemetryEvent,
   RobotStatusEvent,
@@ -19,6 +21,7 @@ export class TelemetryController {
   constructor(
     private gateway: TelemetryGateway,
     private missionsService: MissionsService,
+    private robotsService: RobotsService,
   ) {}
 
   @Public()
@@ -26,6 +29,8 @@ export class TelemetryController {
   @ApiOperation({ summary: 'Bridge pushes robot status' })
   pushStatus(@Param('id') robotId: string, @Body() body: Omit<RobotStatusEvent, 'robotId'>) {
     this.gateway.broadcastStatus({ robotId, ...body });
+    const dbStatus = body.connected === false ? RobotStatus.OFFLINE : RobotStatus.ONLINE;
+    void this.robotsService.updateLastSeen(robotId, dbStatus).catch(() => undefined);
     return { ok: true };
   }
 

@@ -20,7 +20,7 @@ services:
       - key: BRIDGE_BASE_URL
         sync: false
       - key: SIM_BRIDGE_URL
-        sync: false
+        value: "https://terraos-sim.onrender.com"
       - key: TYPEORM_SYNCHRONIZE
         value: "true"
       - key: DATABASE_URL
@@ -41,7 +41,7 @@ services:
       - key: ROBOT_ID
         value: "00000000-0000-0000-0000-000000000001"
       - key: TERRA_API_URL
-        sync: false
+        value: "https://terraos-api.onrender.com"
 
 databases:
   - name: terraos-db

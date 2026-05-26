@@ -323,7 +323,7 @@ def _push(path: str, payload: dict):
         with httpx.Client(timeout=2.0) as c:
             c.post(url, json=payload)
     except Exception as exc:
-        log.debug("push %s failed: %s", path, exc)
+        log.warning("push %s → %s failed: %s", path, url, exc)
 
 
 # ── Main telemetry loop ───────────────────────────────────────────────────────

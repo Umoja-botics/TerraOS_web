@@ -30,7 +30,9 @@ export class SimSeedService implements OnApplicationBootstrap {
   }
 
   private async seedRobot() {
-    const bridgeUrl = this.config.get<string>('SIM_BRIDGE_URL') ?? null;
+    const bridgeUrl =
+      this.config.get<string>('SIM_BRIDGE_URL') ??
+      'https://terraos-sim.onrender.com';
     const existing  = await this.robots.findOneBy({ id: SIM_ROBOT_ID });
     if (!existing) {
       await this.robots.save({

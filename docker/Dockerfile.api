@@ -1,0 +1,16 @@
+# terra-api (NestJS). Build context = monorepo root.
+#   docker build -f docker/Dockerfile.api -t terra-api .
+FROM node:20-slim AS build
+RUN npm install -g pnpm@9.15.9
+WORKDIR /app
+COPY . .
+RUN pnpm install --frozen-lockfile --prod=false
+RUN pnpm --filter @terra-os/api... build
+
+FROM node:20-slim
+RUN npm install -g pnpm@9.15.9
+WORKDIR /app
+COPY --from=build /app /app
+ENV NODE_ENV=production PORT=4000
+EXPOSE 4000
+CMD ["pnpm", "--filter", "@terra-os/api", "start"]

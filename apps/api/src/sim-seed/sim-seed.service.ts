@@ -128,6 +128,11 @@ export class SimSeedService implements OnApplicationBootstrap {
       { email: 'demo-operator@terraos.app', name: 'Démo Operator',
         role: Role.OPERATOR,
         password: this.config.get<string>('DEMO_OPERATOR_PASSWORD') ?? 'demo-operator' },
+      // Admin account so /demo/reset + the VPS cron work out of the box.
+      // MUST be given a strong DEMO_ADMIN_PASSWORD on any public deployment.
+      { email: 'demo-admin@terraos.app',    name: 'Démo Admin',
+        role: Role.ADMIN,
+        password: this.config.get<string>('DEMO_ADMIN_PASSWORD')    ?? 'demo-admin' },
     ];
     for (const a of accounts) {
       const existing = await this.users.findByEmail(a.email);

@@ -1,0 +1,37 @@
+# VPS overlay for docker-compose.demo.yml — fronts the stack with Caddy (auto-TLS).
+#
+# Run from the repo root:
+#   export DEMO_DOMAIN=demo.example.com JWT_SECRET=... DEMO_ADMIN_PASSWORD=...
+#   docker compose -f docker-compose.demo.yml -f deploy/demo-vps/compose.caddy.yml up -d --build
+#
+# Caddy → web (nginx) → api. The web container is no longer published directly.
+
+services:
+  web:
+    ports: []          # only Caddy is exposed to the internet
+
+  api:
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?set a strong JWT_SECRET}
+      WEB_URL: https://${DEMO_DOMAIN}
+      DEMO_VIEWER_PASSWORD: ${DEMO_VIEWER_PASSWORD:-demo-viewer}
+      DEMO_OPERATOR_PASSWORD: ${DEMO_OPERATOR_PASSWORD:-demo-operator}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:?set a strong DEMO_ADMIN_PASSWORD}
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [web]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DEMO_DOMAIN: ${DEMO_DOMAIN:?set DEMO_DOMAIN}
+    volumes:
+      - ./deploy/demo-vps/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:

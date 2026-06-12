@@ -1,0 +1,16 @@
+# terra-web (React/Vite) served by nginx, same-origin proxy to terra-api.
+# Build context = monorepo root.
+#   docker build -f docker/Dockerfile.web -t terra-web .
+FROM node:20-slim AS build
+RUN npm install -g pnpm@9.15.9
+WORKDIR /app
+COPY . .
+RUN pnpm install --frozen-lockfile --prod=false
+# Empty URLs → axios/socket.io use relative paths (same origin via nginx).
+ENV VITE_API_URL="" VITE_SOCKET_URL=""
+RUN pnpm --filter @terra-os/web build
+
+FROM nginx:alpine
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/apps/web/dist /usr/share/nginx/html
+EXPOSE 80

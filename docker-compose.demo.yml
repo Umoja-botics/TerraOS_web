@@ -1,0 +1,106 @@
+# TerraOS — full DEMO stack (offline-capable).
+#
+#   docker compose -f docker-compose.demo.yml up --build
+#   → open http://localhost:8080  (login demo-operator@terraos.app / demo-operator)
+#
+# Three simulators + scenario player + api + web + postgres on an internal
+# network. No external services required once images are built.
+
+x-sim-build: &sim-build
+  build:
+    context: ./apps/bridge
+    dockerfile: Dockerfile.sim
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: terraos
+      POSTGRES_PASSWORD: terraos
+      POSTGRES_DB: terraos
+    volumes:
+      - demo-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U terraos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://terraos:terraos@postgres:5432/terraos
+      TYPEORM_SYNCHRONIZE: "true"
+      JWT_SECRET: demo-not-secret-change-me
+      JWT_EXPIRES_IN: 7d
+      PORT: "4000"
+      WEB_URL: http://localhost:8080
+      DEMO_MODE: "true"
+      SCENARIO_PLAYER_URL: http://scenario-player:8300
+      SIM_UGV_URL: http://sim-ugv:8200
+      SIM_CART_URL: http://sim-cart:8201
+      SIM_DRONE_URL: http://sim-drone:8202
+      DEMO_VIEWER_PASSWORD: ${DEMO_VIEWER_PASSWORD:-demo-viewer}
+      DEMO_OPERATOR_PASSWORD: ${DEMO_OPERATOR_PASSWORD:-demo-operator}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:-demo-admin}
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    depends_on: [api]
+    ports:
+      - "8080:80"
+
+  sim-ugv:
+    <<: *sim-build
+    depends_on: [api]
+    environment:
+      ROBOT_TYPE: ugv
+      ROBOT_ID: "00000000-0000-0000-0000-000000000001"
+      BRIDGE_PORT: "8200"
+      TERRA_API_URL: http://api:4000
+      SIM_AUTO_HEALTH: "false"
+    command: ["uvicorn", "sim_bridge:app", "--host", "0.0.0.0", "--port", "8200"]
+
+  sim-cart:
+    <<: *sim-build
+    depends_on: [api]
+    environment:
+      ROBOT_TYPE: cart
+      ROBOT_ID: "00000000-0000-0000-0000-000000000004"
+      BRIDGE_PORT: "8201"
+      TERRA_API_URL: http://api:4000
+      SIM_AUTO_HEALTH: "false"
+    command: ["uvicorn", "sim_bridge:app", "--host", "0.0.0.0", "--port", "8201"]
+
+  sim-drone:
+    <<: *sim-build
+    depends_on: [api]
+    environment:
+      ROBOT_TYPE: drone
+      ROBOT_ID: "00000000-0000-0000-0000-000000000005"
+      BRIDGE_PORT: "8202"
+      TERRA_API_URL: http://api:4000
+      SIM_AUTO_HEALTH: "false"
+    command: ["uvicorn", "sim_bridge:app", "--host", "0.0.0.0", "--port", "8202"]
+
+  scenario-player:
+    <<: *sim-build
+    depends_on: [api, sim-ugv, sim-cart, sim-drone]
+    environment:
+      TERRA_API_URL: http://api:4000
+      SCENARIO_FILE: scenarios/demo_agri.yaml
+      PLAYER_PORT: "8300"
+      SIM_UGV_URL: http://sim-ugv:8200
+      SIM_CART_URL: http://sim-cart:8201
+      SIM_DRONE_URL: http://sim-drone:8202
+    command: ["uvicorn", "scenario_player:app", "--host", "0.0.0.0", "--port", "8300"]
+
+volumes:
+  demo-pgdata:

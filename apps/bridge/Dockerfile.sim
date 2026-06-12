@@ -1,0 +1,19 @@
+# terra-bridge SIMULATORS + scenario player — no ROS2, pure Python.
+# One image, three sim roles (ROBOT_TYPE) + the player, selected by command.
+#
+# Build:  docker build -f apps/bridge/Dockerfile.sim -t terra-sim apps/bridge
+# Run:    docker run -e ROBOT_TYPE=cart -e ROBOT_ID=... -e TERRA_API_URL=... terra-sim
+
+FROM python:3.11-slim
+
+WORKDIR /bridge
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# Default: UGV simulator on 8200. docker-compose overrides command/env per role.
+ENV ROBOT_TYPE=ugv BRIDGE_PORT=8200
+EXPOSE 8200 8300
+CMD ["uvicorn", "sim_bridge:app", "--host", "0.0.0.0", "--port", "8200"]

@@ -131,18 +131,32 @@ class ScenarioEngine:
         self._stop = False
         self.state = "RUNNING"
         self.log(f"scenario START — {self.scenario.get('name')}")
-        for i, phase in enumerate(self.phases):
-            if self._stop:
-                break
-            self.phase_index = i
-            self.log(f"phase[{i}] ENTER — {phase['name']}")
-            self._run_phase(phase)
-            if self._stop:
-                break
-            self._emit_phase_event(phase.get("on_complete_event"), phase)
-            self.log(f"phase[{i}] DONE — {phase['name']}")
+        try:
+            for i, phase in enumerate(self.phases):
+                if self._stop:
+                    break
+                self.phase_index = i
+                self.log(f"phase[{i}] ENTER — {phase['name']}")
+                self._run_phase(phase)
+                if self._stop:
+                    break
+                self._emit_phase_event(phase.get("on_complete_event"), phase)
+                self.log(f"phase[{i}] DONE — {phase['name']}")
+        except Exception as exc:  # noqa: BLE001 — never let the engine die silently
+            self.state = "ERROR"
+            self.log(f"scenario ERROR: {exc!r}")
+            return
         self.state = "STOPPED" if self._stop else "COMPLETED"
         self.log(f"scenario {self.state}")
+
+    def _eval(self, expr: str) -> bool:
+        """Tolerant condition eval — a not-yet-available state means 'not met',
+        never a crash (sims may be momentarily unreachable)."""
+        try:
+            return eval_condition(expr, self._states)
+        except ConditionError as exc:
+            self.log(f"condition pending ({expr}): {exc}")
+            return False
 
     def inject(self, failure_id: str) -> dict:
         injections = self.scenario.get("failure_injections", {})
@@ -173,14 +187,14 @@ class ScenarioEngine:
             self._states = self.io.read_states()
 
             for trig in triggers:
-                cond = eval_condition(trig["when"], self._states)
+                cond = self._eval(trig["when"])
                 if cond and trig["armed"]:
                     self._fire_trigger(trig)
                     trig["armed"] = False
                 elif not cond and trig.get("repeat"):
                     trig["armed"] = True
 
-            if advance and eval_condition(advance, self._states):
+            if advance and self._eval(advance):
                 return
 
     def _fire_trigger(self, trig: dict) -> None:
@@ -196,7 +210,7 @@ class ScenarioEngine:
             cond = step["wait_until"]
             while not self._stop:
                 self._states = self.io.read_states()
-                if eval_condition(cond, self._states):
+                if self._eval(cond):
                     return
                 self.io.sleep(self.poll_interval)
             return

@@ -12,10 +12,10 @@ import math
 from . import geo
 from .base import BaseSim
 
-SPEED = 6.0           # m/s ground speed
+SPEED = 14.0          # m/s ground speed — brisk recon so ground robots engage soon
 SURVEY_ALT = 30.0     # m
-SWATH_M = 6.0         # lane spacing
-ARRIVE_M = 2.0
+SWATH_M = 12.0        # lane spacing (fewer, faster lanes)
+ARRIVE_M = 3.0
 CLIMB_RATE = 4.0      # m/s
 
 

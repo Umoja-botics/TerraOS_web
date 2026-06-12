@@ -103,6 +103,27 @@ class HttpIO:
         for url in self.urls.values():
             self._post(f"{url}/sim/reset", {})
 
+    def halt_robots(self) -> None:
+        """Cancel any in-progress motion on every sim (used on stop/abort)."""
+        for url in self.urls.values():
+            self._post(f"{url}/commands/mission/command",
+                       {"agent_id": "all", "command": "CANCEL"})
+
+    def wait_ready(self, timeout: float = 10.0) -> bool:
+        """Best-effort wait until every sim answers /health."""
+        deadline = time.time() + timeout
+        pending = set(self.urls.values())
+        while pending and time.time() < deadline:
+            for url in list(pending):
+                try:
+                    if httpx.get(f"{url}/health", timeout=1.0).status_code == 200:
+                        pending.discard(url)
+                except Exception:  # noqa: BLE001
+                    pass
+            if pending:
+                time.sleep(0.5)
+        return not pending
+
     def inject(self, robot: str, effect: str, duration: float, message: str) -> None:
         self._post(f"{self.urls[robot]}/sim/inject",
                    {"effect": effect, "duration": duration, "message": message})
@@ -133,6 +154,8 @@ class Player:
             if self.thread and self.thread.is_alive():
                 return {"ok": False, "reason": "already running",
                         **self.engine.status()}
+            if not self.io.wait_ready(timeout=10.0):
+                log.warning("starting scenario before all sims are ready")
             self.engine = self._new_engine()
             self.thread = threading.Thread(target=self.engine.run, daemon=True)
             self.thread.start()
@@ -142,6 +165,7 @@ class Player:
         self.engine.stop()
         if self.thread:
             self.thread.join(timeout=5.0)
+        self.io.halt_robots()      # actually stop the robots, not just the narrator
         return {"ok": True, **self.engine.status()}
 
     def reset(self) -> dict:

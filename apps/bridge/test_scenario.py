@@ -130,6 +130,30 @@ def test_engine_phases_and_trigger():
     print("✓ engine phases + repeating trigger")
 
 
+def test_engine_tolerates_missing_state():
+    """A momentarily unreachable sim (empty state) must not kill the engine."""
+    scenario = {
+        "name": "robust", "robots": {"drone": {}},
+        "phases": [{
+            "name": "recon",
+            "actions": [{"robot": "drone", "do": "survey", "area": {}}],
+            "advance_when": "drone.coverage >= 100",
+        }],
+    }
+    # First two polls return an empty drone state (sim not ready), then it appears.
+    frames = [
+        {"drone": {}},
+        {"drone": {}},
+        {"drone": {"coverage": 50.0}},
+        {"drone": {"coverage": 100.0}},
+    ]
+    io = StubIO(frames)
+    eng = ScenarioEngine(scenario, io, poll_interval=0.0)
+    eng.run()
+    assert eng.state == "COMPLETED", eng.state
+    print("✓ engine tolerates missing/partial state")
+
+
 def test_inject_lookup():
     scenario = {"name": "x", "robots": {"ugv": {}},
                 "failure_injections": {"g": {"robot": "ugv", "effect": "gps_noise_x100",
@@ -237,6 +261,7 @@ def test_full_scenario_accelerated():
 if __name__ == "__main__":
     test_resolve_and_conditions()
     test_engine_phases_and_trigger()
+    test_engine_tolerates_missing_state()
     test_inject_lookup()
     test_full_scenario_accelerated()
     print("\nALL SCENARIO TESTS PASSED")

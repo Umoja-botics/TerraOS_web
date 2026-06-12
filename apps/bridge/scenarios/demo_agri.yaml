@@ -1,0 +1,81 @@
+name: demo_agriculture_v1
+
+# Robot keys map to the running simulators. URLs may be overridden by the
+# SIM_UGV_URL / SIM_CART_URL / SIM_DRONE_URL environment variables.
+robots:
+  ugv:
+    url: "http://sim-ugv:8200"
+  cart:
+    url: "http://sim-cart:8201"
+    base: { lat: 48.8000, lon: 2.3199 }
+  drone:
+    url: "http://sim-drone:8202"
+    base: { lat: 48.8000, lon: 2.3199 }
+
+phases:
+  # ── 1. Aerial reconnaissance of the parcel ────────────────────────────────
+  - name: reconnaissance
+    actions:
+      - robot: drone
+        do: survey
+        area:
+          corner_a: { lat: 48.8001, lon: 2.3200 }
+          corner_b: { lat: 48.8010, lon: 2.3205 }
+    advance_when: "drone.coverage >= 100"
+    on_complete_event:
+      level: info
+      message: "Reconnaissance terminée — carte de couverture disponible"
+
+  # ── 2. Ground work with synchronized logistics shuttle ────────────────────
+  - name: travail
+    actions:
+      - robot: drone
+        do: return_base
+      - robot: ugv
+        do: follow_path
+        path: rangs_parcelle_nord
+    triggers:
+      - when: "ugv.bin_level >= 90"
+        emit_event:
+          level: warning
+          message: "Bac UGV à 90 % — navette logistique demandée"
+        then:
+          - robot: cart
+            do: goto
+            target: ugv.position
+          - wait_until: "cart.state == DOCKED"
+          - emit_event:
+              level: info
+              message: "Brouette à quai — transfert en cours"
+          - robot: ugv
+            do: transfer
+          - wait: 15
+          - emit_event:
+              level: info
+              message: "Transfert terminé — la brouette rentre à la base"
+          - robot: cart
+            do: return_base
+        repeat: true
+    advance_when: "ugv.mission_complete"
+
+  # ── 3. Return to base ─────────────────────────────────────────────────────
+  - name: fin
+    actions:
+      - robot: ugv
+        do: return_base
+    advance_when: "ugv.mission_complete"
+    on_complete_event:
+      level: success
+      message: "Mission terminée — rapport disponible"
+
+# Triggerable on demand via POST /scenario/inject/{id}
+failure_injections:
+  gps_degraded:
+    robot: ugv
+    effect: gps_noise_x100
+    duration: 30
+    event: "Signal GPS dégradé — vitesse réduite"
+  low_battery:
+    robot: cart
+    effect: battery_drop_to_15
+    event: "Batterie brouette faible — retour base anticipé"

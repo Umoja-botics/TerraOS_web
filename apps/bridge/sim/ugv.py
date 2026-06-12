@@ -25,30 +25,55 @@ class UgvSim(BaseSim):
                          home_lon=self._waypoints[0]["lon"])
         self.total_wp = len(self._waypoints)
         self.bin_level = 0.0
+        self._returning = False
+        self._return_path: list = []
 
     def initial_state(self):
         self.bin_level = 0.0
         self.total_wp = len(self._waypoints)
+        self._returning = False
+        self._return_path = []
 
     def mission_waypoints(self) -> list:
         return self._waypoints
 
     def on_mission_start(self):
         self.total_wp = len(self._waypoints)
+        self._returning = False
+
+    def return_base(self):
+        """Drive back to the field entry point (used by the 'fin' phase)."""
+        with self.lock:
+            if self.estop:
+                return {"ok": False, "reason": "E-STOP active"}
+            self._return_path = geo.straight_path(
+                self.lat, self.lon, self.home_lat, self.home_lon, step_m=4.0)
+            self._returning = True
+            self.total_wp = len(self._return_path)
+            self.current_wp = 0
+            self.mission_running = True
+            self.mission_paused = False
+            self.mission_state = "RUNNING"
+            self.mode = "MISSION"
+        return {"ok": True}
 
     def advance(self, now: float):
+        path = self._return_path if self._returning else self._waypoints
         following = self._pure_pursuit_step(
-            self._waypoints, CRUISE, KAPPA_FACTOR, MIN_SPEED, OMEGA_MAX)
+            path, CRUISE, KAPPA_FACTOR, MIN_SPEED, OMEGA_MAX)
         if not following:
+            self._returning = False
+            self._return_path = []
             self.mission_running = False
             self.mission_state = "COMPLETED"
             self.mode = "STANDBY"
             self.linear_x = 0.0
             self.angular_z = 0.0
             return
-        # Bin fills with distance worked
-        dist_step = self.linear_x * 0.2 * self.speed_mult
-        self.bin_level = min(100.0, self.bin_level + dist_step / FILL_DISTANCE_M * 100.0)
+        # Bin fills only while actively working the field (not when returning)
+        if not self._returning:
+            dist_step = self.linear_x * 0.2 * self.speed_mult
+            self.bin_level = min(100.0, self.bin_level + dist_step / FILL_DISTANCE_M * 100.0)
 
     def transfer(self):
         """Empty the bin into the logistics cart (called when docked)."""

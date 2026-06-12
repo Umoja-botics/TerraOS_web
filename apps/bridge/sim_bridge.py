@@ -189,8 +189,8 @@ def sim_survey(cmd: SurveyCmd):
 
 @app.post("/sim/return_base")
 def sim_return_base():
-    if not isinstance(robot, (CartSim, DroneSim)):
-        raise HTTPException(400, "return_base is only available on cart/drone sims")
+    if not hasattr(robot, "return_base"):
+        raise HTTPException(400, "return_base is not available on this sim")
     return robot.return_base()
 
 

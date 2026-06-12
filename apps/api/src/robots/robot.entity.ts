@@ -26,4 +26,9 @@ export class RobotEntity {
 
   @Column({ type: 'simple-json', default: '{}' })
   config: Record<string, unknown>;
+
+  // Demo simulators (no physical hardware). Drives the SIMULATION UI badge
+  // and routes mission control to the scenario player instead of a real bridge.
+  @Column({ type: 'boolean', default: false })
+  isSimulated: boolean;
 }

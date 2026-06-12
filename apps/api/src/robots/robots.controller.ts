@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
 import { RobotsService } from './robots.service';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '@terra-os/types';
@@ -10,6 +10,7 @@ class CreateRobotDto {
   @IsString() type: string;
   @IsString() @IsOptional() bridgeUrl?: string;
   @IsString() @IsOptional() description?: string;
+  @IsBoolean() @IsOptional() isSimulated?: boolean;
 }
 
 class UpdateRobotDto {
@@ -17,6 +18,7 @@ class UpdateRobotDto {
   @IsString() @IsOptional() type?: string;
   @IsString() @IsOptional() bridgeUrl?: string;
   @IsString() @IsOptional() description?: string;
+  @IsBoolean() @IsOptional() isSimulated?: boolean;
 }
 
 @ApiTags('robots')

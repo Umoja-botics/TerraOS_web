@@ -8,7 +8,10 @@
     "start": "node dist/main",
     "test": "jest",
     "test:cov": "jest --coverage",
-    "lint": "eslint \"{src,test}/**/*.ts\""
+    "lint": "eslint \"{src,test}/**/*.ts\"",
+    "typeorm": "typeorm-ts-node-commonjs -d src/database/data-source.ts",
+    "migration:run": "pnpm typeorm migration:run",
+    "migration:revert": "pnpm typeorm migration:revert"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",

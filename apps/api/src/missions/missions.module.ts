@@ -5,9 +5,10 @@ import { MissionsService } from './missions.service';
 import { MissionsController } from './missions.controller';
 import { RobotsModule } from '../robots/robots.module';
 import { PathsModule } from '../paths/paths.module';
+import { DemoModule } from '../demo/demo.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([MissionEntity]), RobotsModule, PathsModule],
+  imports: [TypeOrmModule.forFeature([MissionEntity]), RobotsModule, PathsModule, DemoModule],
   providers: [MissionsService],
   controllers: [MissionsController],
   exports: [MissionsService],

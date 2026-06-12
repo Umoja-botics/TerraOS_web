@@ -5,6 +5,7 @@ import { MissionEntity } from './mission.entity';
 import { MissionStatus, type CreateMissionDto, type AgentConfig, type MissionLoadDto } from '@terra-os/types';
 import { RobotsService } from '../robots/robots.service';
 import { PathsService } from '../paths/paths.service';
+import { DemoService } from '../demo/demo.service';
 
 @Injectable()
 export class MissionsService {
@@ -15,6 +16,7 @@ export class MissionsService {
     private repo: Repository<MissionEntity>,
     private robotsService: RobotsService,
     private pathsService: PathsService,
+    private demoService: DemoService,
   ) {}
 
   async findAll(): Promise<Array<MissionEntity & { agentConfigs: AgentConfig[] | null }>> {
@@ -111,6 +113,13 @@ export class MissionsService {
     const saved = await this.repo.save(run);
 
     const robot = await this.robotsService.findById(template.robotId);
+
+    // Demo robots: drive the scripted scenario player, not a physical bridge.
+    if (this.demoService.isSimulated(robot)) {
+      await this.demoService.relayStart();
+      return this.toResponse(saved);
+    }
+
     const base = robot.bridgeUrl?.replace(/\/+$/, '');
     if (!base) return this.toResponse(saved);
 
@@ -191,6 +200,10 @@ export class MissionsService {
     const saved = await this.repo.save(mission);
 
     const robot = await this.robotsService.findById(mission.robotId).catch(() => null);
+    if (robot && this.demoService.isSimulated(robot)) {
+      await this.demoService.relayStop();
+      return this.toResponse(saved);
+    }
     const base = robot?.bridgeUrl?.replace(/\/+$/, '');
     if (base) {
       await this.sendToBridge(base, '/commands/mode', { type: 'MISSION_UNLOCK' });

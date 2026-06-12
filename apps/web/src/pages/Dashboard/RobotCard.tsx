@@ -35,7 +35,14 @@ export function RobotCard({ robot, isSelected, onSelect }: Props) {
       )}
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="font-medium text-sm text-gray-100">{robot.name}</span>
+        <span className="flex items-center gap-1.5 font-medium text-sm text-gray-100">
+          {robot.name}
+          {robot.isSimulated && (
+            <span className="text-[9px] px-1 py-0.5 rounded font-mono font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 tracking-wider">
+              SIM
+            </span>
+          )}
+        </span>
         <span
           className={clsx(
             'text-xs px-2 py-0.5 rounded-full font-mono',

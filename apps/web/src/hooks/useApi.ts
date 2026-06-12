@@ -230,3 +230,44 @@ export function useMissionControl() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['missions'] }),
   });
 }
+
+// ── Demo mode ─────────────────────────────────────────────────────────────────
+
+export interface DemoStatus {
+  scenario?: string;
+  state: string;
+  phase: string | null;
+  phase_index: number;
+  total_phases: number;
+  running?: boolean;
+  error?: string;
+}
+
+/** Polls the scenario player status. `enabled` should gate to ADMIN users. */
+export function useDemoStatus(enabled: boolean) {
+  return useQuery({
+    queryKey: ['demo-status'],
+    queryFn: () => api.get<DemoStatus>('/api/v1/demo/status').then((r) => r.data),
+    enabled,
+    refetchInterval: 2000,
+    retry: false,
+  });
+}
+
+export function useDemoInject() {
+  return useMutation({
+    mutationFn: (failureId: string) =>
+      api.post(`/api/v1/demo/inject/${failureId}`).then((r) => r.data),
+  });
+}
+
+export function useDemoReset() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post('/api/v1/demo/reset').then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['missions'] });
+      qc.invalidateQueries({ queryKey: ['demo-status'] });
+    },
+  });
+}

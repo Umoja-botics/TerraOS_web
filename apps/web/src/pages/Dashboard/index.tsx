@@ -6,6 +6,7 @@ import { MissionPanel } from '@/components/widgets/MissionPanel';
 import { MissionPlannerModal, type MissionPlannerDraft } from '@/components/widgets/MissionPlannerModal';
 import { GPSWidget } from '@/components/widgets/GPSWidget';
 import { EventLog } from '@/components/widgets/EventLog';
+import { DemoPanel } from '@/components/widgets/DemoPanel';
 import { JoystickWidget } from '@/components/widgets/JoystickWidget';
 import { CameraWidget } from '@/components/widgets/CameraWidget';
 import { HealthWidget } from '@/components/widgets/HealthWidget';
@@ -16,6 +17,14 @@ import type { ImuData, Mission } from '@terra-os/types';
 import clsx from 'clsx';
 
 const MapWidget = lazy(() => import('@/components/widgets/MapWidget').then((m) => ({ default: m.MapWidget })));
+
+// Keep in sync with TYPE_COLOR in MapWidget so selector dots match map markers.
+const ROBOT_TYPE_COLOR: Record<string, string> = {
+  ugv: '#00ff9d',
+  cart: '#ff9a00',
+  brouette: '#ff9a00',
+  drone: '#a78bfa',
+};
 
 // ── IMU widget ────────────────────────────────────────────────────────────────
 function ImuWidget({ imu }: { imu: ImuData | null }) {
@@ -166,12 +175,16 @@ export function DashboardPage() {
             <button
               key={robot.id}
               onClick={() => selectRobot(robot.id)}
-              className={`shrink-0 text-xs px-3 py-1 rounded-md border font-mono transition-colors ${
+              className={`shrink-0 flex items-center gap-1.5 text-xs px-3 py-1 rounded-md border font-mono transition-colors ${
                 robot.id === selectedRobot?.id
                   ? 'border-brand-600 text-brand-500 bg-brand-900/20'
                   : 'border-gray-700 text-gray-400 hover:border-gray-600'
               }`}
             >
+              <span
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ background: ROBOT_TYPE_COLOR[robot.type] ?? '#00ff9d' }}
+              />
               {robot.name}
             </button>
           ))}
@@ -214,6 +227,8 @@ export function DashboardPage() {
               battery={battery}
               connected={connected}
             />
+
+            <DemoPanel />
 
             <MissionPanel
               robotId={selectedRobot.id}

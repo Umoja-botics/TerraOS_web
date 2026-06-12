@@ -3,13 +3,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { RobotEntity } from '../robots/robot.entity';
 import { MissionEntity } from '../missions/mission.entity';
 import { ReportEntity } from '../reports/report.entity';
+import { PathEntity } from '../paths/path.entity';
 import { SimSeedModule } from '../sim-seed/sim-seed.module';
 import { DemoService } from './demo.service';
 import { DemoController } from './demo.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([RobotEntity, MissionEntity, ReportEntity]),
+    TypeOrmModule.forFeature([RobotEntity, MissionEntity, ReportEntity, PathEntity]),
     SimSeedModule,
   ],
   providers: [DemoService],

@@ -5,7 +5,9 @@ import { ConfigService } from '@nestjs/config';
 import { RobotEntity } from '../robots/robot.entity';
 import { MissionEntity } from '../missions/mission.entity';
 import { ReportEntity } from '../reports/report.entity';
+import { PathEntity } from '../paths/path.entity';
 import { SimSeedService } from '../sim-seed/sim-seed.service';
+import { MissionStatus } from '@terra-os/types';
 
 /**
  * Owns the single decision point for demo behaviour: detecting simulated
@@ -20,6 +22,7 @@ export class DemoService {
     @InjectRepository(RobotEntity)   private robots:   Repository<RobotEntity>,
     @InjectRepository(MissionEntity) private missions: Repository<MissionEntity>,
     @InjectRepository(ReportEntity)  private reports:  Repository<ReportEntity>,
+    @InjectRepository(PathEntity)    private paths:    Repository<PathEntity>,
     private simSeed: SimSeedService,
     private config: ConfigService,
   ) {}
@@ -85,6 +88,47 @@ export class DemoService {
     return { ok: true, purgedMissions, purgedReports };
   }
 
+  // ── Scenario completion (player callback) ───────────────────────────────────
+
+  /**
+   * Called by the player when the scenario finishes: mark each simulated
+   * robot's RUNNING mission COMPLETED and generate a mission report (the relay
+   * bypasses the bridge, which would normally post the report).
+   */
+  async onScenarioComplete(): Promise<{ ok: boolean; reports: number }> {
+    const simRobots = await this.robots.findBy({ isSimulated: true });
+    const running = await this.missions.find({
+      where: simRobots.map((r) => ({ robotId: r.id, status: MissionStatus.RUNNING })),
+    });
+    let reports = 0;
+    for (const m of running) {
+      const endedAt = new Date();
+      m.status = MissionStatus.COMPLETED;
+      m.endedAt = endedAt;
+      await this.missions.save(m);
+
+      const path = m.pathId ? await this.paths.findOneBy({ id: m.pathId }) : null;
+      const wps = path?.waypoints ?? [];
+      await this.reports.save(this.reports.create({
+        missionId: m.id,
+        name: m.name,
+        navMode: m.navMode ?? 'FOLLOW_WAYPOINTS',
+        startedAt: m.startedAt,
+        endedAt,
+        durationS: m.startedAt ? (endedAt.getTime() - m.startedAt.getTime()) / 1000 : 0,
+        status: 'COMPLETED',
+        totalWp: wps.length,
+        completedWp: wps.length,
+        distanceM: Math.round(pathLengthM(wps)),
+        pathName: path?.name ?? null,
+        gpsTrace: [], events: [], faultHistory: [],
+      }));
+      reports++;
+    }
+    this.log.log(`scenario complete — ${reports} report(s) generated`);
+    return { ok: true, reports };
+  }
+
   // ── HTTP to the scenario player ──────────────────────────────────────────────
 
   private async post(path: string): Promise<void> {
@@ -105,4 +149,17 @@ export class DemoService {
       return { state: 'OFFLINE', error: 'player unreachable' };
     }
   }
+}
+
+/** Approximate polyline length (m) for a lat/lon waypoint list (~48.8°). */
+function pathLengthM(wps: Array<{ lat: number; lon: number }>): number {
+  const MPLAT = 111_000;
+  const MPLON = 111_000 * Math.cos((48.8 * Math.PI) / 180);
+  let total = 0;
+  for (let i = 1; i < wps.length; i++) {
+    const dn = (wps[i].lat - wps[i - 1].lat) * MPLAT;
+    const de = (wps[i].lon - wps[i - 1].lon) * MPLON;
+    total += Math.hypot(dn, de);
+  }
+  return total;
 }

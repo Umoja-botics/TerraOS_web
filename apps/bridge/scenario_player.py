@@ -128,6 +128,10 @@ class HttpIO:
         self._post(f"{self.urls[robot]}/sim/inject",
                    {"effect": effect, "duration": duration, "message": message})
 
+    def notify_complete(self) -> None:
+        """Tell terra-api the scenario finished (close missions, make reports)."""
+        self._post(f"{self.api_url}/api/v1/demo/scenario/complete", {})
+
     def _post(self, url: str, body: dict) -> None:
         try:
             httpx.post(url, json=body, timeout=3.0)
@@ -157,9 +161,14 @@ class Player:
             if not self.io.wait_ready(timeout=10.0):
                 log.warning("starting scenario before all sims are ready")
             self.engine = self._new_engine()
-            self.thread = threading.Thread(target=self.engine.run, daemon=True)
+            self.thread = threading.Thread(target=self._run_and_notify, daemon=True)
             self.thread.start()
         return {"ok": True, **self.engine.status()}
+
+    def _run_and_notify(self) -> None:
+        self.engine.run()
+        if self.engine.state == "COMPLETED":
+            self.io.notify_complete()
 
     def stop(self) -> dict:
         self.engine.stop()

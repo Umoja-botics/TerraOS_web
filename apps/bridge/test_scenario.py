@@ -194,6 +194,10 @@ class SimIO:
             sim._integrate_teleop()
             sim._update_imu()
             sim._drain_battery()
+            # Faithfully model the real loop: COMPLETED is transient → IDLE.
+            if sim.mission_state in ("COMPLETED", "ABORTED"):
+                sim.mission_state = "IDLE"
+                sim.mission_id = None
 
     def read_states(self):
         return {k: s.state() for k, s in self.sims.items()}

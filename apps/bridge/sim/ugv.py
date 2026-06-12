@@ -55,6 +55,7 @@ class UgvSim(BaseSim):
             self.mission_paused = False
             self.mission_state = "RUNNING"
             self.mode = "MISSION"
+            self.mission_completed = False
         return {"ok": True}
 
     def advance(self, now: float):
@@ -64,11 +65,7 @@ class UgvSim(BaseSim):
         if not following:
             self._returning = False
             self._return_path = []
-            self.mission_running = False
-            self.mission_state = "COMPLETED"
-            self.mode = "STANDBY"
-            self.linear_x = 0.0
-            self.angular_z = 0.0
+            self.mark_completed()
             return
         # Bin fills only while actively working the field (not when returning)
         if not self._returning:

@@ -70,6 +70,9 @@ class BaseSim:
         self.total_wp = 0
         self.mission_state = "IDLE"
         self.mission_id: Optional[str] = None
+        # Latched: stays True after a mission finishes (the transient COMPLETED
+        # state is reset to IDLE within one tick, too fast for a 1 Hz poller).
+        self.mission_completed = False
 
         # Health
         self.health_level = "OK"
@@ -273,6 +276,19 @@ class BaseSim:
         """Subclass hook: the path a START mission should follow."""
         return []
 
+    def begin_mission(self):
+        """Reset the completion latch when a new mission starts (lock held)."""
+        self.mission_completed = False
+
+    def mark_completed(self):
+        """Latch mission completion (lock held). Call from subclass finishers."""
+        self.mission_running = False
+        self.mission_state = "COMPLETED"
+        self.mode = "STANDBY"
+        self.linear_x = 0.0
+        self.angular_z = 0.0
+        self.mission_completed = True
+
     def start_mission(self):
         with self.lock:
             if self.estop:
@@ -284,6 +300,7 @@ class BaseSim:
             self.mission_state = "RUNNING"
             self.mode = "MISSION"
             self.current_wp = 0
+            self.mission_completed = False
             self.on_mission_start()
             log.info("[%s] mission START — %d wp", self.robot_type, self.total_wp)
         return {"ok": True}
@@ -412,7 +429,7 @@ class BaseSim:
                 "health_level": self.health_level,
                 "mission_running": self.mission_running,
                 "mission_state": self.mission_state,
-                "mission_complete": self.mission_state == "COMPLETED",
+                "mission_complete": self.mission_completed,
                 "current_wp": self.current_wp,
                 "total_wp": self.total_wp,
                 **self.extra_state(),
@@ -431,6 +448,7 @@ class BaseSim:
             self.current_wp = 0
             self.mission_state = "IDLE"
             self.mission_id = None
+            self.mission_completed = False
             self.health_level = "OK"
             self.faults = []
             self.estop = False

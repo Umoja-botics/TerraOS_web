@@ -2,6 +2,7 @@ import { Controller, ForbiddenException, Get, Param, Post } from '@nestjs/common
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DemoService } from './demo.service';
 import { Roles } from '../common/decorators/roles.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { Role } from '@terra-os/types';
 
 @ApiTags('demo')
@@ -36,5 +37,13 @@ export class DemoController {
     this.assertEnabled();
     await this.demo.inject(failureId);
     return { ok: true, failureId };
+  }
+
+  @Public()
+  @Post('scenario/complete')
+  @ApiOperation({ summary: 'Player callback: scenario finished — close missions, make reports' })
+  scenarioComplete() {
+    if (!this.demo.enabled) return { ok: false };
+    return this.demo.onScenarioComplete();
   }
 }

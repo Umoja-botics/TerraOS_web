@@ -46,6 +46,7 @@ class CartSim(BaseSim):
             self.mission_paused = False
             self.mission_state = "RUNNING"
             self.mode = "MISSION"
+            self.mission_completed = False
         return {"ok": True}
 
     def return_base(self):
@@ -62,6 +63,7 @@ class CartSim(BaseSim):
             self.mission_paused = False
             self.mission_state = "RUNNING"
             self.mode = "MISSION"
+            self.mission_completed = False
         return {"ok": True}
 
     def advance(self, now: float):
@@ -76,17 +78,21 @@ class CartSim(BaseSim):
 
     def _arrive(self):
         """Stop and settle into the terminal state (lock held)."""
-        self.linear_x = 0.0
-        self.angular_z = 0.0
-        self.mission_running = False
-        self.mission_state = "COMPLETED"
-        self.mode = "STANDBY"
+        self.mark_completed()
         if self.cart_state == "EN_ROUTE":
             self.cart_state = "DOCKED"
         elif self.cart_state == "RETURNING":
             self.cart_state = "IDLE"
         self._path = []
         self._goal = None
+
+    def abort_mission(self):
+        res = super().abort_mission()
+        with self.lock:
+            self.cart_state = "IDLE"
+            self._path = []
+            self._goal = None
+        return res
 
     # Frontend "START" on the cart simply sends it home (no fixed field path).
     def on_mission_start(self):

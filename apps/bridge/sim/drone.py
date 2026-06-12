@@ -61,6 +61,7 @@ class DroneSim(BaseSim):
             self.mission_paused = False
             self.mission_state = "RUNNING"
             self.mode = "MISSION"
+            self.mission_completed = False
         return {"ok": True}
 
     def return_base(self):
@@ -76,6 +77,7 @@ class DroneSim(BaseSim):
             self.mission_paused = False
             self.mission_state = "RUNNING"
             self.mode = "MISSION"
+            self.mission_completed = False
         return {"ok": True}
 
     def advance(self, now: float):
@@ -109,22 +111,23 @@ class DroneSim(BaseSim):
 
     def _finish(self):
         """Path exhausted (lock held)."""
-        self.linear_x = 0.0
-        self.angular_z = 0.0
         if self.drone_state == "SURVEYING":
             self.coverage = 100.0
-            self.drone_state = "IDLE"
-        elif self.drone_state == "RETURNING":
-            self.drone_state = "IDLE"
-        self.mission_running = False
-        self.mission_state = "COMPLETED"
-        self.mode = "STANDBY"
+        self.drone_state = "IDLE"
+        self.mark_completed()
         self._path = []
 
     def _update_imu(self):
         # Drone banks into turns but stays roughly level; keep it gentle.
         self.roll_deg = geo.smooth(self.roll_deg, 0.0, 0.2)
         self.pitch_deg = geo.smooth(self.pitch_deg, -2.0 if self.linear_x > 0.1 else 0.0, 0.2)
+
+    def abort_mission(self):
+        res = super().abort_mission()
+        with self.lock:
+            self.drone_state = "IDLE"
+            self._path = []
+        return res
 
     def start_mission(self):
         # No default survey area from the frontend → just return home/hover.

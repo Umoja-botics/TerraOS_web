@@ -146,6 +146,10 @@ export class MissionsService {
     const saved = await this.repo.save(mission);
 
     const robot = await this.robotsService.findById(mission.robotId).catch(() => null);
+    if (robot && this.demoService.isSimulated(robot)) {
+      await this.demoService.relayPause();    // pause every active agent
+      return this.toResponse(saved);
+    }
     const base = robot?.bridgeUrl?.replace(/\/+$/, '');
     if (base) {
       if (this.hasAgent(mission, 'ugv')) {
@@ -164,6 +168,10 @@ export class MissionsService {
     const saved = await this.repo.save(mission);
 
     const robot = await this.robotsService.findById(mission.robotId).catch(() => null);
+    if (robot && this.demoService.isSimulated(robot)) {
+      await this.demoService.relayResume();    // resume every active agent
+      return this.toResponse(saved);
+    }
     const base = robot?.bridgeUrl?.replace(/\/+$/, '');
     if (base) {
       if (this.hasAgent(mission, 'ugv')) {

@@ -1,9 +1,14 @@
-import { Controller, ForbiddenException, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { IsBoolean, IsOptional } from 'class-validator';
 import { DemoService } from './demo.service';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { Role } from '@terra-os/types';
+
+class EstopDto {
+  @IsBoolean() @IsOptional() active?: boolean;
+}
 
 @ApiTags('demo')
 @ApiBearerAuth()
@@ -45,5 +50,43 @@ export class DemoController {
   scenarioComplete() {
     if (!this.demo.enabled) return { ok: false };
     return this.demo.onScenarioComplete();
+  }
+
+  // ── Per-agent control ───────────────────────────────────────────────────────
+
+  @Post('agent/:agentId/pause')
+  @Roles(Role.OPERATOR, Role.ADMIN)
+  @ApiOperation({ summary: 'Pause one agent (ugv|brouette|drone)' })
+  async pauseAgent(@Param('agentId') agentId: string) {
+    this.assertEnabled();
+    await this.demo.relayPause(agentId);
+    return { ok: true, agentId };
+  }
+
+  @Post('agent/:agentId/resume')
+  @Roles(Role.OPERATOR, Role.ADMIN)
+  @ApiOperation({ summary: 'Resume one agent' })
+  async resumeAgent(@Param('agentId') agentId: string) {
+    this.assertEnabled();
+    await this.demo.relayResume(agentId);
+    return { ok: true, agentId };
+  }
+
+  @Post('agent/:agentId/estop')
+  @Roles(Role.OPERATOR, Role.ADMIN)
+  @ApiOperation({ summary: 'E-stop / release one agent' })
+  async estopAgent(@Param('agentId') agentId: string, @Body() dto: EstopDto) {
+    this.assertEnabled();
+    await this.demo.relayEstop(dto.active ?? true, agentId);
+    return { ok: true, agentId, active: dto.active ?? true };
+  }
+
+  @Post('estop')
+  @Roles(Role.OPERATOR, Role.ADMIN)
+  @ApiOperation({ summary: 'Global E-stop / release — halts every demo robot' })
+  async estopAll(@Body() dto: EstopDto) {
+    this.assertEnabled();
+    await this.demo.relayEstop(dto.active ?? true);
+    return { ok: true, active: dto.active ?? true };
   }
 }

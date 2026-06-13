@@ -52,6 +52,20 @@ export class DemoService {
     return this.post('/scenario/stop');
   }
 
+  /** Pause/resume one agent, or the whole mission when agent is omitted. */
+  relayPause(agent?: string): Promise<void> {
+    return this.post('/scenario/pause', { agent });
+  }
+
+  relayResume(agent?: string): Promise<void> {
+    return this.post('/scenario/resume', { agent });
+  }
+
+  /** E-stop: one agent, or everything when agent is omitted. */
+  relayEstop(active: boolean, agent?: string): Promise<void> {
+    return this.post('/scenario/estop', { active, agent });
+  }
+
   status(): Promise<unknown> {
     return this.get('/scenario/status');
   }

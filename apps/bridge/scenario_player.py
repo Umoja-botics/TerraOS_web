@@ -94,7 +94,11 @@ class HttpIO:
             st = states.get(_AGENT_KEY[agent_id]) or {}
             if not st:
                 continue
-            if st.get("mission_running"):
+            if st.get("estop"):
+                state = "ABORTED"
+            elif st.get("mission_state") == "PAUSED":
+                state = "PAUSED"
+            elif st.get("mission_running"):
                 state = "RUNNING"
             elif st.get("mission_complete"):
                 state = "COMPLETED"
@@ -150,6 +154,14 @@ class HttpIO:
         for url in self.urls.values():
             self._post(f"{url}/commands/mission/command",
                        {"agent_id": "all", "command": "CANCEL"})
+
+    def command_sim(self, key: str, command: str) -> None:
+        """Send a mission command (PAUSE/RESUME/…) to one sim by robot key."""
+        self._post(f"{self.urls[key]}/commands/mission/command",
+                   {"agent_id": "all", "command": command})
+
+    def estop_sim(self, key: str, active: bool) -> None:
+        self._post(f"{self.urls[key]}/commands/estop", {"active": active})
 
     def wait_ready(self, timeout: float = 10.0) -> bool:
         """Best-effort wait until every sim answers /health."""
@@ -258,6 +270,38 @@ class Player:
             "phase_index": -1, "total_phases": 0}
         return {**base, "running": running}
 
+    def _targets(self, agent: str | None) -> list:
+        """Sim keys to act on: one agent, or every active agent."""
+        agents = [agent] if agent else self.io.active_agents
+        return [_AGENT_KEY[a] for a in agents if a in _AGENT_KEY]
+
+    def pause(self, agent: str | None = None) -> dict:
+        for key in self._targets(agent):
+            self.io.command_sim(key, "PAUSE")
+        log.info("pause — %s", agent or "all")
+        return {"ok": True, **self.status()}
+
+    def resume(self, agent: str | None = None) -> dict:
+        for key in self._targets(agent):
+            self.io.command_sim(key, "RESUME")
+        log.info("resume — %s", agent or "all")
+        return {"ok": True, **self.status()}
+
+    def estop(self, active: bool, agent: str | None = None) -> dict:
+        # A global e-stop also halts the narrator so it stops driving the sims.
+        if active and agent is None and self.engine:
+            self.engine.stop()
+            if self.thread:
+                self.thread.join(timeout=5.0)
+        for key in (self._targets(agent) if agent else list(self.io.urls)):
+            self.io.estop_sim(key, active)
+        # Push one more status frame so the UI reflects the e-stop even though the
+        # monitor loop has stopped (global e-stop halts the engine).
+        time.sleep(0.3)
+        self.io.read_states()
+        log.info("e-stop active=%s — %s", active, agent or "all")
+        return {"ok": True, **self.status()}
+
     def inject(self, failure_id: str) -> dict:
         spec = self.cfg.get("failure_injections", {}).get(failure_id)
         if not spec:
@@ -277,6 +321,15 @@ class StartReq(BaseModel):
     robotId: str | None = None        # orchestrator robot the agents report under
 
 
+class CtrlReq(BaseModel):
+    agent: str | None = None          # one agent, or all active when omitted
+
+
+class EstopReq(BaseModel):
+    active: bool = True
+    agent: str | None = None
+
+
 @app.post("/scenario/start")
 def scenario_start(req: StartReq = StartReq()):
     return player.start(req.agents, req.robotId)
@@ -285,6 +338,21 @@ def scenario_start(req: StartReq = StartReq()):
 @app.post("/scenario/stop")
 def scenario_stop():
     return player.stop()
+
+
+@app.post("/scenario/pause")
+def scenario_pause(req: CtrlReq = CtrlReq()):
+    return player.pause(req.agent)
+
+
+@app.post("/scenario/resume")
+def scenario_resume(req: CtrlReq = CtrlReq()):
+    return player.resume(req.agent)
+
+
+@app.post("/scenario/estop")
+def scenario_estop(req: EstopReq = EstopReq()):
+    return player.estop(req.active, req.agent)
 
 
 @app.post("/scenario/reset")

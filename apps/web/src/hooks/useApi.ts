@@ -271,3 +271,21 @@ export function useDemoReset() {
     },
   });
 }
+
+/** Pause / resume / e-stop a single demo agent (ugv|brouette|drone). */
+export function useDemoAgentControl() {
+  return useMutation({
+    mutationFn: ({ agentId, action, active }: { agentId: string; action: 'pause' | 'resume' | 'estop'; active?: boolean }) =>
+      api
+        .post(`/api/v1/demo/agent/${agentId}/${action}`, action === 'estop' ? { active } : undefined)
+        .then((r) => r.data),
+  });
+}
+
+/** Global demo E-stop / release. */
+export function useDemoEstop() {
+  return useMutation({
+    mutationFn: (active: boolean) =>
+      api.post('/api/v1/demo/estop', { active }).then((r) => r.data),
+  });
+}

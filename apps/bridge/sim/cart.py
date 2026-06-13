@@ -39,6 +39,7 @@ class CartSim(BaseSim):
                 return {"ok": False, "reason": "E-STOP active"}
             self._goal = (lat, lon)
             self._path = geo.straight_path(self.lat, self.lon, lat, lon, step_m=4.0)
+            self.active_path = self._path
             self.total_wp = len(self._path)
             self.current_wp = 0
             self.cart_state = "EN_ROUTE"
@@ -56,6 +57,7 @@ class CartSim(BaseSim):
             self._goal = (self.home_lat, self.home_lon)
             self._path = geo.straight_path(
                 self.lat, self.lon, self.home_lat, self.home_lon, step_m=4.0)
+            self.active_path = self._path
             self.total_wp = len(self._path)
             self.current_wp = 0
             self.cart_state = "RETURNING"

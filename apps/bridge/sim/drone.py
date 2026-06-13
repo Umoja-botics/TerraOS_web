@@ -49,6 +49,7 @@ class DroneSim(BaseSim):
             path = geo.boustrophedon(area["corner_a"], area["corner_b"], SWATH_M)
             # Start from current position so the climb-out reads naturally
             self._path = [{"lat": self.lat, "lon": self.lon}] + path
+            self.active_path = self._path
             self._idx = 1
             self._total_len = max(1e-6, geo.path_length_m(self._path))
             self._covered = 0.0
@@ -70,6 +71,7 @@ class DroneSim(BaseSim):
                 return {"ok": False, "reason": "E-STOP active"}
             self._path = [{"lat": self.lat, "lon": self.lon},
                           {"lat": self.home_lat, "lon": self.home_lon}]
+            self.active_path = self._path
             self._idx = 1
             self._target_alt = 0.0
             self.drone_state = "RETURNING"

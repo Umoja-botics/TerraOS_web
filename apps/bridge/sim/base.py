@@ -73,6 +73,8 @@ class BaseSim:
         # Latched: stays True after a mission finishes (the transient COMPLETED
         # state is reset to IDLE within one tick, too fast for a 1 Hz poller).
         self.mission_completed = False
+        # Current reference path the robot is following (drawn on the map).
+        self.active_path: list = []
 
         # Health
         self.health_level = "OK"
@@ -242,6 +244,8 @@ class BaseSim:
                     "yaw": round(math.degrees(self.yaw_rad) % 360.0, 3)},
             "velocity": {"linear_x": round(self.linear_x, 3),
                          "angular_z": round(self.angular_z, 3)},
+            "path": [{"lat": round(p["lat"], 6), "lon": round(p["lon"], 6)}
+                     for p in self.active_path],
             **self.extra_telemetry(),
         }
         return {
@@ -288,6 +292,7 @@ class BaseSim:
         self.linear_x = 0.0
         self.angular_z = 0.0
         self.mission_completed = True
+        self.active_path = []
 
     def start_mission(self):
         with self.lock:
@@ -432,6 +437,7 @@ class BaseSim:
                 "mission_complete": self.mission_completed,
                 "current_wp": self.current_wp,
                 "total_wp": self.total_wp,
+                "active_path_len": len(self.active_path),
                 **self.extra_state(),
             }
 
@@ -449,6 +455,7 @@ class BaseSim:
             self.mission_state = "IDLE"
             self.mission_id = None
             self.mission_completed = False
+            self.active_path = []
             self.health_level = "OK"
             self.faults = []
             self.estop = False

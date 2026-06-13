@@ -86,6 +86,7 @@ export const useFleetStore = create<FleetState>()((set, get) => ({
         gps: event.gps ?? current?.gps,
         imu: event.imu ?? current?.imu,
         velocity: event.velocity ?? current?.velocity,
+        path: event.path ?? current?.path,
       });
       if (event.agentId && event.agentId !== 'ugv') {
         return {

@@ -40,6 +40,7 @@ class UgvSim(BaseSim):
     def on_mission_start(self):
         self.total_wp = len(self._waypoints)
         self._returning = False
+        self.active_path = self._waypoints
 
     def return_base(self):
         """Drive back to the field entry point (used by the 'fin' phase)."""
@@ -49,6 +50,7 @@ class UgvSim(BaseSim):
             self._return_path = geo.straight_path(
                 self.lat, self.lon, self.home_lat, self.home_lon, step_m=4.0)
             self._returning = True
+            self.active_path = self._return_path
             self.total_wp = len(self._return_path)
             self.current_wp = 0
             self.mission_running = True

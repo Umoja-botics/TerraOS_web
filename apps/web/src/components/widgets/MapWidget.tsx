@@ -138,6 +138,23 @@ export function MapWidget({ fleet, selectedRobot, pathWaypoints }: Props) {
         {gps && <MapRecenter lat={gps.lat} lon={gps.lon} />}
         <MapFitPath pathWaypoints={pathWaypoints} />
 
+        {/* Reference path each robot is currently following */}
+        {fleet.map((robot) => {
+          const path = robot.live?.telemetry?.path;
+          if (!path || path.length < 2) return null;
+          const color = TYPE_COLOR[robot.type] ?? '#00ff9d';
+          return (
+            <Polyline
+              key={`refpath:${robot.id}`}
+              positions={path.map((p) => [p.lat, p.lon] as [number, number])}
+              color={color}
+              weight={2}
+              opacity={0.55}
+              dashArray="5 5"
+            />
+          );
+        })}
+
         {robotsWithGps.map((robot) => {
           const pos = robot.live!.telemetry!.gps;
           const yaw = robot.live?.telemetry?.imu?.yaw ?? 0;

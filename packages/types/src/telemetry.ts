@@ -40,6 +40,8 @@ export interface RobotTelemetryEvent {
   gps: GpsPosition;
   imu: ImuData;
   velocity: Velocity;
+  /** Current reference path the robot is following (drawn on the map). */
+  path?: Array<{ lat: number; lon: number }>;
 }
 
 export interface RobotEventPayload {

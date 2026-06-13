@@ -207,7 +207,7 @@ class SimIO:
         self.acts.append((robot, do))
         sim = self.sims[robot]
         if do == "survey":
-            sim.survey(params["area"])
+            sim.survey(params.get("area"))
         elif do == "return_base":
             sim.return_base()
         elif do == "follow_path":
@@ -237,19 +237,39 @@ class SimIO:
         self.sims[robot].inject(effect, duration, message)
 
 
-def _load_demo():
-    with open("scenarios/demo_agri.yaml", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+# Mirrors scenario_player.build_scenario — agents launch simultaneously.
+_AGENT_KEY = {"ugv": "ugv", "brouette": "cart", "drone": "drone"}
+_AGENT_DO = {"ugv": "follow_path", "brouette": "patrol", "drone": "survey"}
+
+
+def build_scenario(agents):
+    primary = "ugv" if "ugv" in agents else ("drone" if "drone" in agents else agents[0])
+    cond = f"{_AGENT_KEY[primary]}.mission_complete"
+    return {
+        "name": "demo_mission", "robots": {}, "failure_injections": {},
+        "phases": [
+            {"name": "mission",
+             "actions": [{"robot": _AGENT_KEY[a], "do": _AGENT_DO[a]} for a in agents],
+             "advance_when": cond},
+            {"name": "fin",
+             "actions": [{"robot": _AGENT_KEY[a], "do": "return_base"} for a in agents],
+             "advance_when": cond,
+             "on_complete_event": {"level": "success", "message": "Mission terminée"}},
+        ],
+    }
 
 
 def test_full_scenario_accelerated():
     sims = {"ugv": make_sim("ugv", "u"), "cart": make_sim("cart", "c"),
             "drone": make_sim("drone", "d")}
     io = SimIO(sims)
-    scenario = _load_demo()
-    eng = ScenarioEngine(scenario, io, poll_interval=1.0, logger=lambda m: None)
+    eng = ScenarioEngine(build_scenario(["ugv", "brouette", "drone"]), io,
+                         poll_interval=1.0, logger=lambda m: None)
     eng.run()
 
+    # All three launched in the first phase (simultaneously)
+    launch = [a for a in io.acts if a[1] in ("follow_path", "patrol", "survey")]
+    assert {a[0] for a in launch} == {"ugv", "cart", "drone"}, launch
     assert eng.state == "COMPLETED", eng.status()
     assert sims["drone"].coverage >= 100.0, sims["drone"].coverage
     assert ("cart", "patrol") in io.acts, "cart never patrolled"
@@ -261,10 +281,27 @@ def test_full_scenario_accelerated():
           f"ugv done, sim-time {io.clock:.0f}s")
 
 
+def test_single_agent_mission():
+    """A drone-only mission runs just the drone (custom-mission support)."""
+    sims = {"ugv": make_sim("ugv", "u"), "cart": make_sim("cart", "c"),
+            "drone": make_sim("drone", "d")}
+    io = SimIO(sims)
+    eng = ScenarioEngine(build_scenario(["drone"]), io, poll_interval=1.0,
+                         logger=lambda m: None)
+    eng.run()
+    assert eng.state == "COMPLETED", eng.status()
+    assert sims["drone"].coverage >= 100.0
+    # UGV and cart were never commanded
+    assert not any(a[0] in ("ugv", "cart") for a in io.acts), io.acts
+    assert sims["ugv"].mission_state == "IDLE" and not sims["ugv"].mission_running
+    print("✓ single-agent mission (drone only) — others untouched")
+
+
 if __name__ == "__main__":
     test_resolve_and_conditions()
     test_engine_phases_and_trigger()
     test_engine_tolerates_missing_state()
     test_inject_lookup()
     test_full_scenario_accelerated()
+    test_single_agent_mission()
     print("\nALL SCENARIO TESTS PASSED")

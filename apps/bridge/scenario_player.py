@@ -18,6 +18,7 @@ import httpx
 import uvicorn
 import yaml
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 from scenario_engine import ConditionError, ScenarioEngine
 
@@ -34,8 +35,19 @@ POLL_INTERVAL  = float(os.environ.get("SCENARIO_POLL", "1.0")) / max(SPEED, 1e-6
 _LEVEL_TYPE = {"info": "system", "success": "ok", "warning": "warn",
                "warn": "warn", "error": "alarm", "alarm": "alarm"}
 
-# Sim robot key → mission agent id (multi-agent MissionPanel)
-_AGENT_OF = {"ugv": "ugv", "cart": "brouette", "drone": "drone"}
+# mission agent id ↔ sim robot key
+_AGENT_KEY = {"ugv": "ugv", "brouette": "cart", "drone": "drone"}
+# default behaviour each agent runs when launched
+_AGENT_DO = {"ugv": "follow_path", "brouette": "patrol", "drone": "survey"}
+_AGENT_LABEL = {"ugv": "UGV", "brouette": "Brouette", "drone": "Drone"}
+
+
+def _agent_action(agent: str) -> dict:
+    return {"robot": _AGENT_KEY[agent], "do": _AGENT_DO[agent]}
+
+
+def _agent_return(agent: str) -> dict:
+    return {"robot": _AGENT_KEY[agent], "do": "return_base"}
 
 
 def _load_scenario(path: str) -> dict:
@@ -56,6 +68,8 @@ class HttpIO:
         self.api_url = api_url.rstrip("/")
         self.urls = {k: r["url"].rstrip("/") for k, r in scenario["robots"].items()}
         self._cache: dict = {}
+        self.orchestrator_id: str | None = None        # robot the agents report under
+        self.active_agents: list = list(_AGENT_KEY)    # agent ids in the running mission
 
     def read_states(self) -> dict:
         states = {}
@@ -71,13 +85,13 @@ class HttpIO:
         return states
 
     def _publish_agents(self, states: dict) -> None:
-        """Report each sim as an agent of the UGV (orchestrator) robot, so the
-        multi-agent MissionPanel shows the three launching in sequence."""
-        orch = (states.get("ugv") or {}).get("robot_id")
+        """Report each active sim as an agent of the mission's orchestrator robot
+        so the multi-agent MissionPanel shows them launch together."""
+        orch = self.orchestrator_id or (states.get("ugv") or {}).get("robot_id")
         if not orch:
             return
-        for key, agent_id in _AGENT_OF.items():
-            st = states.get(key) or {}
+        for agent_id in self.active_agents:
+            st = states.get(_AGENT_KEY[agent_id]) or {}
             if not st:
                 continue
             if st.get("mission_running"):
@@ -94,7 +108,8 @@ class HttpIO:
     def act(self, robot: str, do: str, params: dict, states: dict) -> None:
         url = self.urls[robot]
         if do == "survey":
-            self._post(f"{url}/sim/survey", {"area": params["area"]})
+            area = params.get("area")
+            self._post(f"{url}/sim/survey", {"area": area} if area else {})
         elif do == "return_base":
             self._post(f"{url}/sim/return_base", {})
         elif do == "follow_path":
@@ -170,25 +185,49 @@ class HttpIO:
 
 class Player:
     def __init__(self):
-        self.scenario = _load_scenario(SCENARIO_FILE)
-        self.io = HttpIO(self.scenario, API_URL)
-        self.engine = self._new_engine()
+        self.cfg = _load_scenario(SCENARIO_FILE)   # robots URLs + failure_injections
+        self.io = HttpIO(self.cfg, API_URL)
+        self.engine: ScenarioEngine | None = None
         self.thread: threading.Thread | None = None
         self.lock = threading.Lock()
 
-    def _new_engine(self) -> ScenarioEngine:
-        return ScenarioEngine(self.scenario, self.io,
-                              poll_interval=POLL_INTERVAL, logger=log.info)
+    def build_scenario(self, agents: list) -> dict:
+        """Build a scenario where every chosen agent launches simultaneously,
+        works, then returns to base. Any subset is supported."""
+        agents = [a for a in agents if a in _AGENT_KEY] or ["ugv"]
+        primary = "ugv" if "ugv" in agents else ("drone" if "drone" in agents else agents[0])
+        cond = f"{_AGENT_KEY[primary]}.mission_complete"
+        return {
+            "name": "demo_mission",
+            "robots": self.cfg["robots"],
+            "failure_injections": self.cfg.get("failure_injections", {}),
+            "phases": [
+                {"name": "mission",
+                 "actions": [_agent_action(a) for a in agents],   # all at once
+                 "advance_when": cond,
+                 "on_complete_event": {"level": "info",
+                                       "message": "Travail terminé — retour à la base"}},
+                {"name": "fin",
+                 "actions": [_agent_return(a) for a in agents],
+                 "advance_when": cond,
+                 "on_complete_event": {"level": "success",
+                                       "message": "Mission terminée — rapport disponible"}},
+            ],
+        }
 
-    def start(self) -> dict:
+    def start(self, agents: list | None = None, robot_id: str | None = None) -> dict:
         with self.lock:
             if self.thread and self.thread.is_alive():
-                return {"ok": False, "reason": "already running",
-                        **self.engine.status()}
+                return {"ok": False, "reason": "already running", **self.status()}
+            agents = [a for a in (agents or list(_AGENT_KEY)) if a in _AGENT_KEY] or ["ugv"]
+            self.io.active_agents = agents
+            self.io.orchestrator_id = robot_id or None
             if not self.io.wait_ready(timeout=10.0):
-                log.warning("starting scenario before all sims are ready")
-            self.io.reset_robots()      # clean slate → scenario is relaunchable
-            self.engine = self._new_engine()
+                log.warning("starting mission before all sims are ready")
+            self.io.reset_robots()      # clean slate → relaunchable
+            self.engine = ScenarioEngine(self.build_scenario(agents), self.io,
+                                         poll_interval=POLL_INTERVAL, logger=log.info)
+            log.info("mission START — agents=%s orchestrator=%s", agents, robot_id)
             self.thread = threading.Thread(target=self._run_and_notify, daemon=True)
             self.thread.start()
         return {"ok": True, **self.engine.status()}
@@ -199,33 +238,48 @@ class Player:
             self.io.notify_complete()
 
     def stop(self) -> dict:
-        self.engine.stop()
+        if self.engine:
+            self.engine.stop()
         if self.thread:
             self.thread.join(timeout=5.0)
         self.io.halt_robots()      # actually stop the robots, not just the narrator
-        return {"ok": True, **self.engine.status()}
+        return {"ok": True, **self.status()}
 
     def reset(self) -> dict:
         self.stop()
         self.io.reset_robots()
-        self.engine = self._new_engine()
-        return {"ok": True, **self.engine.status()}
+        self.engine = None
+        return {"ok": True, **self.status()}
 
     def status(self) -> dict:
         running = bool(self.thread and self.thread.is_alive())
-        return {**self.engine.status(), "running": running}
+        base = self.engine.status() if self.engine else {
+            "scenario": "demo_mission", "state": "IDLE", "phase": None,
+            "phase_index": -1, "total_phases": 0}
+        return {**base, "running": running}
 
     def inject(self, failure_id: str) -> dict:
-        return self.engine.inject(failure_id)
+        spec = self.cfg.get("failure_injections", {}).get(failure_id)
+        if not spec:
+            raise ConditionError(f"Unknown failure injection: {failure_id}")
+        self.io.inject(spec["robot"], spec["effect"],
+                       float(spec.get("duration", 0.0)), spec.get("event", ""))
+        log.info("inject %s → %s %s", failure_id, spec["robot"], spec["effect"])
+        return {"ok": True, "failure_id": failure_id}
 
 
 player = Player()
 app = FastAPI(title="terra-scenario-player", version="1.0.0")
 
 
+class StartReq(BaseModel):
+    agents: list[str] | None = None   # subset of ugv|brouette|drone (default: all)
+    robotId: str | None = None        # orchestrator robot the agents report under
+
+
 @app.post("/scenario/start")
-def scenario_start():
-    return player.start()
+def scenario_start(req: StartReq = StartReq()):
+    return player.start(req.agents, req.robotId)
 
 
 @app.post("/scenario/stop")
@@ -253,8 +307,7 @@ def scenario_inject(failure_id: str):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "scenario": player.scenario.get("name"),
-            **player.status()}
+    return {"status": "ok", **player.status()}
 
 
 if __name__ == "__main__":

@@ -43,8 +43,9 @@ export class DemoService {
 
   // ── Scenario relay ──────────────────────────────────────────────────────────
 
-  relayStart(): Promise<void> {
-    return this.post('/scenario/start');
+  /** Launch the chosen agents (all simultaneously) for an orchestrator robot. */
+  relayStart(agents: string[], robotId: string): Promise<void> {
+    return this.post('/scenario/start', { agents, robotId });
   }
 
   relayStop(): Promise<void> {
@@ -131,9 +132,14 @@ export class DemoService {
 
   // ── HTTP to the scenario player ──────────────────────────────────────────────
 
-  private async post(path: string): Promise<void> {
+  private async post(path: string, body?: unknown): Promise<void> {
     try {
-      const res = await fetch(`${this.playerUrl}${path}`, { method: 'POST' });
+      const res = await fetch(`${this.playerUrl}${path}`, {
+        method: 'POST',
+        ...(body !== undefined
+          ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+          : {}),
+      });
       if (!res.ok) this.log.warn(`Player ${path} → ${res.status}`);
     } catch (err) {
       this.log.warn(`Player unreachable at ${this.playerUrl}${path}: ${String(err)}`);

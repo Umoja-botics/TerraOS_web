@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
-import { IsArray, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import { IsArray, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { MissionsService } from './missions.service';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -13,7 +13,9 @@ class AgentConfigDto {
 }
 
 class CreateMissionDto {
-  @IsUUID() robotId: string;
+  // Robot reference — not strictly @IsUUID so demo robots (fixed all-zero ids,
+  // not spec-valid v4 UUIDs) can be targeted. Existence is checked at start.
+  @IsString() robotId: string;
   @IsString() name: string;
   @IsString() navMode: string;
   @IsArray() @ValidateNested({ each: true }) @Type(() => AgentConfigDto)
@@ -22,7 +24,7 @@ class CreateMissionDto {
 
 class UpdateMissionDto {
   @IsString() @IsOptional() name?: string;
-  @IsString() @IsOptional() @IsUUID() robotId?: string;
+  @IsString() @IsOptional() robotId?: string;
   @IsString() @IsOptional() navMode?: string;
   @IsArray() @IsOptional() @ValidateNested({ each: true }) @Type(() => AgentConfigDto)
   agentConfigs?: AgentConfigDto[];

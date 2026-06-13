@@ -171,7 +171,7 @@ def survey_area() -> dict:
             "corner_b": {"lat": round(b_lat, 7), "lon": round(b_lon, 7)}}
 
 
-def perimeter_path(margin_m: float = 14.0, laps: int = 3, step_m: float = 6.0) -> list:
+def perimeter_path(margin_m: float = 12.0, laps: int = 1, step_m: float = 6.0) -> list:
     """
     Closed rectangle around the whole working area (UGV rows + drone survey),
     repeated `laps` times — the cart's patrol route.

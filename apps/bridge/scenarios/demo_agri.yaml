@@ -1,58 +1,19 @@
 name: demo_agriculture_v1
 
-# Robot keys map to the running simulators. URLs may be overridden by the
-# SIM_UGV_URL / SIM_CART_URL / SIM_DRONE_URL environment variables.
+# The player builds the mission dynamically from the agents requested by the API
+# (any subset of ugv/brouette/drone, all launched simultaneously). This file only
+# provides the robot endpoints and the on-demand failure injections.
 # Location: open farmland (Beauce), origin (48.1900, 1.7000).
+
 robots:
   ugv:
-    url: "http://sim-ugv:8200"
+    url: "http://sim-ugv:8200"          # overridable by SIM_UGV_URL
   cart:
-    url: "http://sim-cart:8201"
+    url: "http://sim-cart:8201"         # overridable by SIM_CART_URL
     base: { lat: 48.1898919, lon: 1.6998378 }
   drone:
-    url: "http://sim-drone:8202"
+    url: "http://sim-drone:8202"        # overridable by SIM_DRONE_URL
     base: { lat: 48.1898919, lon: 1.6998378 }
-
-phases:
-  # ── 1. Aerial reconnaissance of the parcel ────────────────────────────────
-  - name: reconnaissance
-    actions:
-      - robot: drone
-        do: survey
-        area:
-          corner_a: { lat: 48.189982, lon: 1.699973 }
-          corner_b: { lat: 48.190955, lon: 1.7004054 }
-    advance_when: "drone.coverage >= 100"
-    on_complete_event:
-      level: info
-      message: "Reconnaissance terminée — carte de couverture disponible"
-
-  # ── 2. Ground work + perimeter logistics patrol ───────────────────────────
-  - name: travail
-    actions:
-      - robot: drone
-        do: return_base
-      - robot: ugv
-        do: follow_path
-        path: rangs_parcelle_nord
-      - robot: cart
-        do: patrol               # rectangle around the UGV + drone working area
-    advance_when: "ugv.mission_complete"
-    on_complete_event:
-      level: info
-      message: "Rangs traités — la brouette termine sa ronde périmétrique"
-
-  # ── 3. Return to base ─────────────────────────────────────────────────────
-  - name: fin
-    actions:
-      - robot: ugv
-        do: return_base
-      - robot: cart
-        do: return_base
-    advance_when: "ugv.mission_complete"
-    on_complete_event:
-      level: success
-      message: "Mission terminée — rapport disponible"
 
 # Triggerable on demand via POST /scenario/inject/{id}
 failure_injections:

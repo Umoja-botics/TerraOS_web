@@ -42,10 +42,11 @@ class DroneSim(BaseSim):
 
     # ── Player-driven goals ────────────────────────────────────────────────────
 
-    def survey(self, area: dict):
+    def survey(self, area: dict | None = None):
         with self.lock:
             if self.estop:
                 return {"ok": False, "reason": "E-STOP active"}
+            area = area or geo.survey_area()   # default to the field bounding box
             path = geo.boustrophedon(area["corner_a"], area["corner_b"], SWATH_M)
             # Start from current position so the climb-out reads naturally
             self._path = [{"lat": self.lat, "lon": self.lon}] + path

@@ -114,9 +114,11 @@ export class MissionsService {
 
     const robot = await this.robotsService.findById(template.robotId);
 
-    // Demo robots: drive the scripted scenario player, not a physical bridge.
+    // Demo robots: launch the chosen agents via the player, not a physical bridge.
     if (this.demoService.isSimulated(robot)) {
-      await this.demoService.relayStart();
+      const agents = this.parseAgentConfigs(template.agentsJson, template.pathId)
+        .map((a) => a.agentId);
+      await this.demoService.relayStart(agents, template.robotId);
       return this.toResponse(saved);
     }
 

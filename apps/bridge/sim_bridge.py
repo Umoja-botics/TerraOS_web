@@ -143,7 +143,7 @@ class GotoCmd(BaseModel):
     lon: float
 
 class SurveyCmd(BaseModel):
-    area: dict
+    area: dict = {}
 
 class InjectCmd(BaseModel):
     effect: str
@@ -188,10 +188,10 @@ def sim_patrol():
 
 
 @app.post("/sim/survey")
-def sim_survey(cmd: SurveyCmd):
+def sim_survey(cmd: SurveyCmd = SurveyCmd()):
     if not isinstance(robot, DroneSim):
         raise HTTPException(400, "survey is only available on a drone sim")
-    return robot.survey(cmd.area)
+    return robot.survey(cmd.area or None)
 
 
 @app.post("/sim/return_base")

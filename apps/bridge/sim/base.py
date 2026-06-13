@@ -363,14 +363,13 @@ class BaseSim:
         with self.lock:
             self.estop = active
             if active:
+                # Freeze in place — keep the mission so a release resumes it.
                 self.mode = "ESTOP"
                 self.linear_x = 0.0
                 self.angular_z = 0.0
-                if self.mission_running:
-                    self.mission_running = False
-                    self.mission_state = "ABORTED"
             else:
-                self.mode = "STANDBY"
+                # Resume the held mission, or fall back to standby.
+                self.mode = "MISSION" if self.mission_running else "STANDBY"
         log.info("[%s] E-STOP active=%s", self.robot_type, active)
         return {"ok": True}
 

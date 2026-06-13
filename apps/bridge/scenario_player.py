@@ -288,17 +288,13 @@ class Player:
         return {"ok": True, **self.status()}
 
     def estop(self, active: bool, agent: str | None = None) -> dict:
-        # A global e-stop also halts the narrator so it stops driving the sims.
-        if active and agent is None and self.engine:
-            self.engine.stop()
-            if self.thread:
-                self.thread.join(timeout=5.0)
+        # E-stop freezes the agent(s) in place but keeps the mission, so the
+        # engine simply waits (advance_when can't fire while held) and a release
+        # resumes them — no need to stop the narrator.
         for key in (self._targets(agent) if agent else list(self.io.urls)):
             self.io.estop_sim(key, active)
-        # Push one more status frame so the UI reflects the e-stop even though the
-        # monitor loop has stopped (global e-stop halts the engine).
         time.sleep(0.3)
-        self.io.read_states()
+        self.io.read_states()   # reflect estop/resume in the UI immediately
         log.info("e-stop active=%s — %s", active, agent or "all")
         return {"ok": True, **self.status()}
 

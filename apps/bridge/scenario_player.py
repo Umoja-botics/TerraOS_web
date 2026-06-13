@@ -34,6 +34,9 @@ POLL_INTERVAL  = float(os.environ.get("SCENARIO_POLL", "1.0")) / max(SPEED, 1e-6
 _LEVEL_TYPE = {"info": "system", "success": "ok", "warning": "warn",
                "warn": "warn", "error": "alarm", "alarm": "alarm"}
 
+# Sim robot key → mission agent id (multi-agent MissionPanel)
+_AGENT_OF = {"ugv": "ugv", "cart": "brouette", "drone": "drone"}
+
 
 def _load_scenario(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as f:
@@ -64,7 +67,29 @@ class HttpIO:
             except Exception as exc:  # noqa: BLE001
                 log.warning("read_states %s failed: %s", key, exc)
                 states[key] = self._cache.get(key, {})
+        self._publish_agents(states)
         return states
+
+    def _publish_agents(self, states: dict) -> None:
+        """Report each sim as an agent of the UGV (orchestrator) robot, so the
+        multi-agent MissionPanel shows the three launching in sequence."""
+        orch = (states.get("ugv") or {}).get("robot_id")
+        if not orch:
+            return
+        for key, agent_id in _AGENT_OF.items():
+            st = states.get(key) or {}
+            if not st:
+                continue
+            if st.get("mission_running"):
+                state = "RUNNING"
+            elif st.get("mission_complete"):
+                state = "COMPLETED"
+            else:
+                state = "IDLE"
+            cur, tot = st.get("current_wp", 0), st.get("total_wp", 0)
+            progress = round(cur / tot * 100) if tot else (100 if state == "COMPLETED" else 0)
+            self._post(f"{self.api_url}/api/v1/robots/{orch}/agents/{agent_id}/status",
+                       {"state": state, "currentWp": cur, "totalWp": tot, "progress": progress})
 
     def act(self, robot: str, do: str, params: dict, states: dict) -> None:
         url = self.urls[robot]

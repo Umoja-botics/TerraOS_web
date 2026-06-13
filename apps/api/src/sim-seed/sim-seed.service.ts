@@ -105,15 +105,26 @@ export class SimSeedService implements OnApplicationBootstrap {
     this.log.log('Demo field path created (57 waypoints)');
   }
 
-  /** Recreate the IDLE UGV mission template if absent (used on reset too). */
+  /** Multi-agent demo mission: UGV (rows) + brouette (perimeter) + drone (recon). */
+  private demoAgentsJson(): string {
+    return JSON.stringify([
+      { agentId: 'ugv', pathId: DEMO_IDS.fieldPath, task: 'follow_path' },
+      { agentId: 'brouette', pathId: DEMO_IDS.fieldPath, task: 'follow_waypoints' },
+      { agentId: 'drone', task: 'inspection' },
+    ]);
+  }
+
+  /** Recreate the IDLE multi-agent mission template if absent (used on reset). */
   async ensureMissionTemplate() {
+    const agentsJson = this.demoAgentsJson();
     const existing = await this.missions.findOneBy({ id: DEMO_IDS.ugvMission });
     if (existing) {
+      const patch: Partial<MissionEntity> = {};
       if (existing.status !== MissionStatus.IDLE) {
-        await this.missions.update(DEMO_IDS.ugvMission, {
-          status: MissionStatus.IDLE, startedAt: null, endedAt: null,
-        });
+        Object.assign(patch, { status: MissionStatus.IDLE, startedAt: null, endedAt: null });
       }
+      if (existing.agentsJson !== agentsJson) patch.agentsJson = agentsJson;  // upgrade to multi-agent
+      if (Object.keys(patch).length) await this.missions.update(DEMO_IDS.ugvMission, patch);
       return;
     }
     await this.missions.save({
@@ -121,12 +132,13 @@ export class SimSeedService implements OnApplicationBootstrap {
       robotId: DEMO_IDS.ugv,
       name: 'Mission agricole démo',
       pathId: DEMO_IDS.fieldPath,
+      agentsJson,
       status: MissionStatus.IDLE,
       startedAt: null,
       endedAt: null,
       navMode: NavMode.FOLLOW_WAYPOINTS,
     });
-    this.log.log('Demo mission template created');
+    this.log.log('Demo multi-agent mission template created');
   }
 
   private async seedDemoUsers() {

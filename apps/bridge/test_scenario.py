@@ -178,6 +178,7 @@ class SimIO:
         self.sims = sims                      # {key: BaseSim}
         self.clock = 0.0
         self.emits = []
+        self.acts = []
 
     def _pump_one(self, sim):
         self.clock += DT
@@ -203,6 +204,7 @@ class SimIO:
         return {k: s.state() for k, s in self.sims.items()}
 
     def act(self, robot, do, params, states):
+        self.acts.append((robot, do))
         sim = self.sims[robot]
         if do == "survey":
             sim.survey(params["area"])
@@ -213,6 +215,8 @@ class SimIO:
         elif do == "goto":
             tgt = params["target"]
             sim.goto(tgt["lat"], tgt["lon"])
+        elif do == "patrol":
+            sim.patrol()
         elif do == "transfer":
             sim.transfer()
 
@@ -248,18 +252,13 @@ def test_full_scenario_accelerated():
 
     assert eng.state == "COMPLETED", eng.status()
     assert sims["drone"].coverage >= 100.0, sims["drone"].coverage
-    transfer_emits = [e for e in io.emits if "Transfert terminé" in e[2]]
-    assert len(transfer_emits) >= 2, f"expected ≥2 shuttle runs, got {len(transfer_emits)}"
+    assert ("cart", "patrol") in io.acts, "cart never patrolled"
+    assert ("ugv", "follow_path") in io.acts and ("ugv", "return_base") in io.acts
     assert sims["ugv"].mission_state in ("COMPLETED", "IDLE")
     assert any(e[1] == "success" for e in io.emits), "missing final success event"
-    # Cart has made it home or is on its way back from the last shuttle.
-    from sim import geo
-    d = geo.distance_m(sims["cart"].lat, sims["cart"].lon,
-                       sims["cart"].home_lat, sims["cart"].home_lon)
-    assert sims["cart"].cart_state in ("IDLE", "RETURNING"), sims["cart"].cart_state
-    print(f"✓ full scenario — {len(transfer_emits)} shuttle runs, "
-          f"drone {sims['drone'].coverage:.0f}% coverage, cart {sims['cart'].cart_state} "
-          f"({d:.0f} m from base), sim-time {io.clock:.0f}s")
+    print(f"✓ full scenario — drone {sims['drone'].coverage:.0f}% coverage, "
+          f"cart patrolled (state={sims['cart'].cart_state}), "
+          f"ugv done, sim-time {io.clock:.0f}s")
 
 
 if __name__ == "__main__":

@@ -180,6 +180,13 @@ def sim_goto(cmd: GotoCmd):
     return robot.goto(cmd.lat, cmd.lon)
 
 
+@app.post("/sim/patrol")
+def sim_patrol():
+    if not isinstance(robot, CartSim):
+        raise HTTPException(400, "patrol is only available on a cart sim")
+    return robot.patrol()
+
+
 @app.post("/sim/survey")
 def sim_survey(cmd: SurveyCmd):
     if not isinstance(robot, DroneSim):

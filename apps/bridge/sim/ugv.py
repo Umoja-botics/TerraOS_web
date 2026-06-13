@@ -8,9 +8,11 @@ from . import geo
 from .base import BaseSim
 
 CRUISE = 4.0          # m/s
-KAPPA_FACTOR = 20.0   # speed = CRUISE / (1 + |κ| * factor)
-MIN_SPEED = 0.5
-OMEGA_MAX = 2.0
+KAPPA_FACTOR = 25.0   # speed = CRUISE / (1 + |κ| * factor)
+MIN_SPEED = 1.0       # never crawl (crawling + turning looks like pivoting)
+OMEGA_MAX = 0.9       # cap turn rate → smooth headland curve, no spin-in-place
+L_MIN = 2.5           # longer min lookahead → smoother, earlier steering
+K_LOOKAHEAD = 1.2
 
 FILL_DISTANCE_M = 60.0  # metres of work to fill the bin from 0 → 100 %
 
@@ -63,7 +65,8 @@ class UgvSim(BaseSim):
     def advance(self, now: float):
         path = self._return_path if self._returning else self._waypoints
         following = self._pure_pursuit_step(
-            path, CRUISE, KAPPA_FACTOR, MIN_SPEED, OMEGA_MAX)
+            path, CRUISE, KAPPA_FACTOR, MIN_SPEED, OMEGA_MAX,
+            l_min=L_MIN, k_lookahead=K_LOOKAHEAD)
         if not following:
             self._returning = False
             self._return_path = []

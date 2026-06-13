@@ -78,6 +78,8 @@ class HttpIO:
         elif do == "goto":
             tgt = params["target"]
             self._post(f"{url}/sim/goto", {"lat": tgt["lat"], "lon": tgt["lon"]})
+        elif do == "patrol":
+            self._post(f"{url}/sim/patrol", {})
         elif do == "transfer":
             self._post(f"{url}/sim/transfer", {})
         else:
@@ -160,6 +162,7 @@ class Player:
                         **self.engine.status()}
             if not self.io.wait_ready(timeout=10.0):
                 log.warning("starting scenario before all sims are ready")
+            self.io.reset_robots()      # clean slate → scenario is relaunchable
             self.engine = self._new_engine()
             self.thread = threading.Thread(target=self._run_and_notify, daemon=True)
             self.thread.start()

@@ -23,7 +23,7 @@ class DroneSim(BaseSim):
     robot_type = "drone"
 
     def __init__(self, robot_id: str):
-        super().__init__(robot_id, home_lat=48.8000, home_lon=2.3199)
+        super().__init__(robot_id, home_lat=geo.FIELD_BASE["lat"], home_lon=geo.FIELD_BASE["lon"])
         self.drone_state = "IDLE"
         self.coverage = 0.0
         self._path: list = []

@@ -6,9 +6,26 @@ around a reference latitude — accurate enough for a field-sized demo.
 """
 import math
 
-# Conversion constants for lat ~48.8° (Île-de-France demo field)
+# ── Agricultural field location (open farmland, Beauce — not a city) ───────────
+FIELD_LAT = 48.1900   # south-west reference of the field
+FIELD_LON = 1.7000
+ROW_LEN_M = 90.0      # length of each crop row
+ROW_GAP_M = 28.0      # spacing aller↔retour → headland U-turn radius = 14 m
+N_ARC     = 48        # arc segments (smooth U-turn)
+
+# Conversion constants at the field latitude
 METERS_PER_LAT = 111_000.0
-METERS_PER_LON = 111_000.0 * math.cos(math.radians(48.8))
+METERS_PER_LON = 111_000.0 * math.cos(math.radians(FIELD_LAT))
+
+
+def offset_latlon(east_m: float, north_m: float, *,
+                  lat0: float = FIELD_LAT, lon0: float = FIELD_LON):
+    """Local east/north metres → (lat, lon) around the field origin."""
+    return (lat0 + north_m / METERS_PER_LAT, lon0 + east_m / METERS_PER_LON)
+
+
+# Cart / drone base — just outside the field's south-west corner.
+FIELD_BASE = dict(zip(("lat", "lon"), offset_latlon(-12.0, -12.0)))
 
 
 def smooth(current: float, target: float, alpha: float = 0.25) -> float:
@@ -122,31 +139,57 @@ def pure_pursuit_lookahead(lat: float, lon: float, yaw: float,
 
 def build_field_waypoints() -> list:
     """
-    UGV default path: 4 straight WP + 48-segment smooth arc (R=8 m) + 4 straight.
-    Tested: max CTE 0.113 m, max heading err 5.0°, zero reversals.
+    UGV path (aller-retour): west row north → smooth headland U-turn (R = 14 m,
+    48 segments) → east row south. 57 waypoints, built from the field origin.
     """
-    lat_c, lon_c, R = 48.8009001, 2.3202094, 8.0
-    straight_n = [
-        {"lat": 48.8001, "lon": 2.3201},
-        {"lat": 48.8003, "lon": 2.3201},
-        {"lat": 48.8005, "lon": 2.3201},
-        {"lat": 48.8007, "lon": 2.3201},
-        {"lat": 48.8009, "lon": 2.3201},
-    ]
-    arc = []
-    for i in range(1, 49):  # skip i=0 (= straight_n[-1])
-        a = math.pi - (i / 48) * math.pi
-        arc.append({
-            "lat": lat_c + R * math.sin(a) / METERS_PER_LAT,
-            "lon": lon_c + R * math.cos(a) / METERS_PER_LON,
-        })
-    straight_s = [
-        {"lat": 48.8007, "lon": 2.3203188},
-        {"lat": 48.8005, "lon": 2.3203188},
-        {"lat": 48.8003, "lon": 2.3203188},
-        {"lat": 48.8001, "lon": 2.3203188},
-    ]
-    return straight_n + arc + straight_s
+    R = ROW_GAP_M / 2.0
+    wp: list = []
+
+    def add(east_m, north_m):
+        lat, lon = offset_latlon(east_m, north_m)
+        wp.append({"lat": lat, "lon": lon})
+
+    # West row, south → north
+    for i in range(5):
+        add(0.0, i / 4.0 * ROW_LEN_M)
+    # Headland U-turn, west → east over the top
+    for i in range(1, N_ARC + 1):
+        a = math.pi - (i / N_ARC) * math.pi
+        add(R * (1.0 + math.cos(a)), ROW_LEN_M + R * math.sin(a))
+    # East row, north → south
+    for i in range(1, 5):
+        add(ROW_GAP_M, ROW_LEN_M * (1.0 - i / 4.0))
+    return wp
+
+
+def survey_area() -> dict:
+    """Rectangle covering the field (drone boustrophedon), as two GPS corners."""
+    R = ROW_GAP_M / 2.0
+    a_lat, a_lon = offset_latlon(-2.0, -2.0)
+    b_lat, b_lon = offset_latlon(ROW_GAP_M + 2.0, ROW_LEN_M + R + 2.0)
+    return {"corner_a": {"lat": round(a_lat, 7), "lon": round(a_lon, 7)},
+            "corner_b": {"lat": round(b_lat, 7), "lon": round(b_lon, 7)}}
+
+
+def perimeter_path(margin_m: float = 14.0, laps: int = 3, step_m: float = 6.0) -> list:
+    """
+    Closed rectangle around the whole working area (UGV rows + drone survey),
+    repeated `laps` times — the cart's patrol route.
+    """
+    R = ROW_GAP_M / 2.0
+    e0, e1 = -margin_m, ROW_GAP_M + margin_m
+    n0, n1 = -margin_m, ROW_LEN_M + R + margin_m
+    corners = [offset_latlon(e0, n0), offset_latlon(e1, n0),
+               offset_latlon(e1, n1), offset_latlon(e0, n1)]
+    ring = [{"lat": la, "lon": lo} for la, lo in corners] + \
+           [{"lat": corners[0][0], "lon": corners[0][1]}]
+    path: list = []
+    for _ in range(laps):
+        for a, b in zip(ring, ring[1:]):
+            seg = straight_path(a["lat"], a["lon"], b["lat"], b["lon"], step_m)
+            path.extend(seg[:-1])          # avoid duplicate joints
+    path.append(ring[0])
+    return path
 
 
 def straight_path(lat1: float, lon1: float, lat2: float, lon2: float,

@@ -2,15 +2,16 @@ name: demo_agriculture_v1
 
 # Robot keys map to the running simulators. URLs may be overridden by the
 # SIM_UGV_URL / SIM_CART_URL / SIM_DRONE_URL environment variables.
+# Location: open farmland (Beauce), origin (48.1900, 1.7000).
 robots:
   ugv:
     url: "http://sim-ugv:8200"
   cart:
     url: "http://sim-cart:8201"
-    base: { lat: 48.8000, lon: 2.3199 }
+    base: { lat: 48.1898919, lon: 1.6998378 }
   drone:
     url: "http://sim-drone:8202"
-    base: { lat: 48.8000, lon: 2.3199 }
+    base: { lat: 48.1898919, lon: 1.6998378 }
 
 phases:
   # ── 1. Aerial reconnaissance of the parcel ────────────────────────────────
@@ -19,14 +20,14 @@ phases:
       - robot: drone
         do: survey
         area:
-          corner_a: { lat: 48.8001, lon: 2.3200 }
-          corner_b: { lat: 48.8010, lon: 2.3205 }
+          corner_a: { lat: 48.189982, lon: 1.699973 }
+          corner_b: { lat: 48.190955, lon: 1.7004054 }
     advance_when: "drone.coverage >= 100"
     on_complete_event:
       level: info
       message: "Reconnaissance terminée — carte de couverture disponible"
 
-  # ── 2. Ground work with synchronized logistics shuttle ────────────────────
+  # ── 2. Ground work + perimeter logistics patrol ───────────────────────────
   - name: travail
     actions:
       - robot: drone
@@ -34,34 +35,19 @@ phases:
       - robot: ugv
         do: follow_path
         path: rangs_parcelle_nord
-    triggers:
-      - when: "ugv.bin_level >= 90"
-        emit_event:
-          level: warning
-          message: "Bac UGV à 90 % — navette logistique demandée"
-        then:
-          - robot: cart
-            do: goto
-            target: ugv.position
-          - wait_until: "cart.state == DOCKED"
-          - emit_event:
-              level: info
-              message: "Brouette à quai — transfert en cours"
-          - robot: ugv
-            do: transfer
-          - wait: 15
-          - emit_event:
-              level: info
-              message: "Transfert terminé — la brouette rentre à la base"
-          - robot: cart
-            do: return_base
-        repeat: true
+      - robot: cart
+        do: patrol               # rectangle around the UGV + drone working area
     advance_when: "ugv.mission_complete"
+    on_complete_event:
+      level: info
+      message: "Rangs traités — la brouette termine sa ronde périmétrique"
 
   # ── 3. Return to base ─────────────────────────────────────────────────────
   - name: fin
     actions:
       - robot: ugv
+        do: return_base
+      - robot: cart
         do: return_base
     advance_when: "ugv.mission_complete"
     on_complete_event:

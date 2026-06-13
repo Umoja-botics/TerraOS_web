@@ -84,12 +84,21 @@ export class SimSeedService implements OnApplicationBootstrap {
   }
 
   private async seedPath() {
-    if (await this.paths.findOneBy({ id: DEMO_IDS.fieldPath })) return;
+    const waypoints = buildFieldWaypoints();
+    const existing = await this.paths.findOneBy({ id: DEMO_IDS.fieldPath });
+    if (existing) {
+      // Refresh waypoints if the field geometry moved (e.g. new origin).
+      if (existing.waypoints?.[0]?.lat !== waypoints[0].lat) {
+        await this.paths.update(DEMO_IDS.fieldPath, { waypoints });
+        this.log.log('Demo field path waypoints refreshed');
+      }
+      return;
+    }
     await this.paths.save({
       id: DEMO_IDS.fieldPath,
       name: 'Champ démo — rangs parcelle nord',
       navMode: NavMode.FOLLOW_WAYPOINTS,
-      waypoints: buildFieldWaypoints(),
+      waypoints,
       createdBy: DEMO_IDS.ugv,
       yamlContent: null,
     });

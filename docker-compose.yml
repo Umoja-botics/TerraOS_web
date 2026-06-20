@@ -1,0 +1,60 @@
+# TerraOS — REAL stack (server side: api + web + postgres).
+#
+#   docker compose up -d --build
+#   → web on http://localhost:8080   ·   api on http://<host>:4000
+#
+# No simulators, no DEMO_MODE: real robots connect via their own terra-bridge
+# (run onboard, apps/bridge/Dockerfile — ROS2). Register each robot in the API
+# with bridgeUrl = http://<robot-ip>:8100. The api port is published so the
+# bridges can push telemetry to http://<host>:4000.
+#
+# Same api/web images as docker-compose.demo.yml — the demo only adds
+# DEMO_MODE=true + the 3 sim services + the scenario player.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: terraos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-terraos}
+      POSTGRES_DB: terraos
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U terraos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://terraos:${POSTGRES_PASSWORD:-terraos}@postgres:5432/terraos
+      TYPEORM_SYNCHRONIZE: "true"
+      JWT_SECRET: ${JWT_SECRET:?set a strong JWT_SECRET}
+      JWT_EXPIRES_IN: 7d
+      PORT: "4000"
+      WEB_URL: ${WEB_URL:-http://localhost:8080}
+      # Allow creating the first admin via POST /api/v1/seed/admin (then remove).
+      ALLOW_SEED_ADMIN: ${ALLOW_SEED_ADMIN:-true}
+      # Explicitly off → no simulated robots, no demo accounts (overrides any
+      # stray .env the image might carry).
+      DEMO_MODE: "false"
+    ports:
+      - "4000:4000"          # real robot bridges push telemetry here
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    depends_on: [api]
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:

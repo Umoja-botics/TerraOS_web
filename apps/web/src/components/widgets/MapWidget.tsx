@@ -60,15 +60,30 @@ const AGENT_COLOR: Record<string, string> = {
   drone: '#a78bfa',
 };
 
+// Marker colour by robot type so the three demo robots read apart at a glance.
+const TYPE_COLOR: Record<string, string> = {
+  ugv: '#00ff9d',
+  cart: '#ff9a00',
+  brouette: '#ff9a00',
+  drone: '#a78bfa',
+};
+
 // Arrow icon pointing north by default — rotated by IMU yaw.
 // ROS2 yaw is CCW-positive; CSS rotation is CW-positive → negate.
-function robotIcon(yawRad: number) {
+function robotIcon(yawRad: number, type: string, simulated: boolean) {
   const deg = (-yawRad * 180) / Math.PI;
+  const color = TYPE_COLOR[type] ?? '#00ff9d';
+  // Dashed halo distinguishes simulated robots without hurting legibility.
+  const halo = simulated
+    ? `<circle cx="16" cy="16" r="14" fill="none" stroke="${color}" stroke-width="1.5"
+         stroke-dasharray="3 3" opacity="0.8"/>`
+    : '';
   return L.divIcon({
     html: `<div style="width:32px;height:32px;transform:rotate(${deg}deg);transform-origin:center">
       <svg viewBox="0 0 32 32" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
-        <polygon points="16,3 23,23 16,19 9,23" fill="#00ff9d" stroke="#0a0a0a" stroke-width="1.5" stroke-linejoin="round"/>
-        <circle cx="16" cy="16" r="4" fill="#00ff9d" stroke="#0a0a0a" stroke-width="1.5"/>
+        ${halo}
+        <polygon points="16,3 23,23 16,19 9,23" fill="${color}" stroke="#0a0a0a" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="16" cy="16" r="4" fill="${color}" stroke="#0a0a0a" stroke-width="1.5"/>
       </svg>
     </div>`,
     className: '',
@@ -123,13 +138,30 @@ export function MapWidget({ fleet, selectedRobot, pathWaypoints }: Props) {
         {gps && <MapRecenter lat={gps.lat} lon={gps.lon} />}
         <MapFitPath pathWaypoints={pathWaypoints} />
 
+        {/* Reference path each robot is currently following */}
+        {fleet.map((robot) => {
+          const path = robot.live?.telemetry?.path;
+          if (!path || path.length < 2) return null;
+          const color = TYPE_COLOR[robot.type] ?? '#00ff9d';
+          return (
+            <Polyline
+              key={`refpath:${robot.id}`}
+              positions={path.map((p) => [p.lat, p.lon] as [number, number])}
+              color={color}
+              weight={2}
+              opacity={0.55}
+              dashArray="5 5"
+            />
+          );
+        })}
+
         {robotsWithGps.map((robot) => {
           const pos = robot.live!.telemetry!.gps;
           const yaw = robot.live?.telemetry?.imu?.yaw ?? 0;
           return (
-            <Marker key={robot.id} position={[pos.lat, pos.lon]} icon={robotIcon(yaw)}>
+            <Marker key={robot.id} position={[pos.lat, pos.lon]} icon={robotIcon(yaw, robot.type, robot.isSimulated)}>
               <Popup>
-                <strong>{robot.name}</strong><br />
+                <strong>{robot.name}</strong>{robot.isSimulated ? ' (SIM)' : ''}<br />
                 {pos.lat.toFixed(6)}, {pos.lon.toFixed(6)}<br />
                 Alt: {pos.altitude.toFixed(1)} m | Fix: {pos.fix}<br />
                 Cap: {(((-yaw * 180) / Math.PI + 360) % 360).toFixed(1)}°

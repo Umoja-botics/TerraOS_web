@@ -1,0 +1,28 @@
+name: demo_agriculture_v1
+
+# The player builds the mission dynamically from the agents requested by the API
+# (any subset of ugv/brouette/drone, all launched simultaneously). This file only
+# provides the robot endpoints and the on-demand failure injections.
+# Location: open farmland (Beauce), origin (48.1900, 1.7000).
+
+robots:
+  ugv:
+    url: "http://sim-ugv:8200"          # overridable by SIM_UGV_URL
+  cart:
+    url: "http://sim-cart:8201"         # overridable by SIM_CART_URL
+    base: { lat: 48.1898919, lon: 1.6998378 }
+  drone:
+    url: "http://sim-drone:8202"        # overridable by SIM_DRONE_URL
+    base: { lat: 48.1898919, lon: 1.6998378 }
+
+# Triggerable on demand via POST /scenario/inject/{id}
+failure_injections:
+  gps_degraded:
+    robot: ugv
+    effect: gps_noise_x100
+    duration: 30
+    event: "Signal GPS dégradé — vitesse réduite"
+  low_battery:
+    robot: cart
+    effect: battery_drop_to_15
+    event: "Batterie brouette faible — retour base anticipé"

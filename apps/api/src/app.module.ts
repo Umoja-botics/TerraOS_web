@@ -11,6 +11,7 @@ import { TelemetryModule } from './telemetry/telemetry.module';
 import { PluginsModule } from './plugins/plugins.module';
 import { HealthModule } from './health/health.module';
 import { SimSeedModule } from './sim-seed/sim-seed.module';
+import { DemoModule } from './demo/demo.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { SimSeedModule } from './sim-seed/sim-seed.module';
     PluginsModule,
     HealthModule,
     SimSeedModule,
+    DemoModule,
   ],
 })
 export class AppModule {}

@@ -230,3 +230,72 @@ export function useMissionControl() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['missions'] }),
   });
 }
+
+// ── Demo mode ─────────────────────────────────────────────────────────────────
+
+export interface DemoStatus {
+  scenario?: string;
+  state: string;
+  phase: string | null;
+  phase_index: number;
+  total_phases: number;
+  running?: boolean;
+  error?: string;
+}
+
+/** Polls the scenario player status. `enabled` should gate to ADMIN users. */
+export function useDemoStatus(enabled: boolean) {
+  return useQuery({
+    queryKey: ['demo-status'],
+    queryFn: () => api.get<DemoStatus>('/api/v1/demo/status').then((r) => r.data),
+    enabled,
+    refetchInterval: 2000,
+    retry: false,
+  });
+}
+
+export function useDemoInject() {
+  return useMutation({
+    mutationFn: (failureId: string) =>
+      api.post(`/api/v1/demo/inject/${failureId}`).then((r) => r.data),
+  });
+}
+
+export function useDemoReset() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post('/api/v1/demo/reset').then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['missions'] });
+      qc.invalidateQueries({ queryKey: ['demo-status'] });
+    },
+  });
+}
+
+/** Pause / resume / cancel a single agent on a real (non-demo) robot. */
+export function useAgentControl() {
+  return useMutation({
+    mutationFn: ({ missionId, agentId, action }: { missionId: string; agentId: string; action: 'pause' | 'resume' | 'cancel' }) =>
+      api
+        .post(`/api/v1/missions/${missionId}/agents/${agentId}/${action}`)
+        .then((r) => r.data),
+  });
+}
+
+/** Pause / resume / e-stop a single demo agent (ugv|brouette|drone). */
+export function useDemoAgentControl() {
+  return useMutation({
+    mutationFn: ({ agentId, action, active }: { agentId: string; action: 'pause' | 'resume' | 'estop'; active?: boolean }) =>
+      api
+        .post(`/api/v1/demo/agent/${agentId}/${action}`, action === 'estop' ? { active } : undefined)
+        .then((r) => r.data),
+  });
+}
+
+/** Global demo E-stop / release. */
+export function useDemoEstop() {
+  return useMutation({
+    mutationFn: (active: boolean) =>
+      api.post('/api/v1/demo/estop', { active }).then((r) => r.data),
+  });
+}

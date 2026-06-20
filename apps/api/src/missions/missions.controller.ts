@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
-import { IsArray, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import { IsArray, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { MissionsService } from './missions.service';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -13,7 +13,9 @@ class AgentConfigDto {
 }
 
 class CreateMissionDto {
-  @IsUUID() robotId: string;
+  // Robot reference — not strictly @IsUUID so demo robots (fixed all-zero ids,
+  // not spec-valid v4 UUIDs) can be targeted. Existence is checked at start.
+  @IsString() robotId: string;
   @IsString() name: string;
   @IsString() navMode: string;
   @IsArray() @ValidateNested({ each: true }) @Type(() => AgentConfigDto)
@@ -22,7 +24,7 @@ class CreateMissionDto {
 
 class UpdateMissionDto {
   @IsString() @IsOptional() name?: string;
-  @IsString() @IsOptional() @IsUUID() robotId?: string;
+  @IsString() @IsOptional() robotId?: string;
   @IsString() @IsOptional() navMode?: string;
   @IsArray() @IsOptional() @ValidateNested({ each: true }) @Type(() => AgentConfigDto)
   agentConfigs?: AgentConfigDto[];
@@ -151,6 +153,27 @@ export class MissionsController {
   @ApiOperation({ summary: 'Legacy orchestrator load' })
   load(@Body() dto: MissionLoadBodyDto) {
     return this.missionsService.loadMission(dto as any);
+  }
+
+  @Post(':id/agents/:agentId/pause')
+  @Roles(Role.OPERATOR, Role.ADMIN)
+  @ApiOperation({ summary: 'Pause a single agent without pausing the whole mission' })
+  pauseAgent(@Param('id') id: string, @Param('agentId') agentId: string) {
+    return this.missionsService.pauseAgent(id, agentId);
+  }
+
+  @Post(':id/agents/:agentId/resume')
+  @Roles(Role.OPERATOR, Role.ADMIN)
+  @ApiOperation({ summary: 'Resume a single paused agent' })
+  resumeAgent(@Param('id') id: string, @Param('agentId') agentId: string) {
+    return this.missionsService.resumeAgent(id, agentId);
+  }
+
+  @Post(':id/agents/:agentId/cancel')
+  @Roles(Role.OPERATOR, Role.ADMIN)
+  @ApiOperation({ summary: 'Cancel a single agent individually (mission keeps running)' })
+  cancelAgent(@Param('id') id: string, @Param('agentId') agentId: string) {
+    return this.missionsService.cancelAgent(id, agentId);
   }
 
   @Post(':id/control')

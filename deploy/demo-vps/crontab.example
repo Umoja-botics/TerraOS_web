@@ -1,0 +1,7 @@
+# TerraOS demo — reset to a clean state every hour, on the hour.
+# Install with:  crontab deploy/demo-vps/crontab.example   (edit paths/secrets first)
+#
+# Keep the password out of the crontab in production: source it from a root-only
+# env file instead (e.g. set -a; . /opt/terraos/demo.env; set +a).
+
+0 * * * * API_URL=https://demo.example.com DEMO_ADMIN_PASSWORD=CHANGE_ME /opt/terraos/deploy/demo-vps/reset-demo.sh >> /var/log/terra-demo-reset.log 2>&1

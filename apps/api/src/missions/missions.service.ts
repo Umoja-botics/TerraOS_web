@@ -5,6 +5,7 @@ import { MissionEntity } from './mission.entity';
 import { MissionStatus, type CreateMissionDto, type AgentConfig, type MissionLoadDto } from '@terra-os/types';
 import { RobotsService } from '../robots/robots.service';
 import { PathsService } from '../paths/paths.service';
+import { DemoService } from '../demo/demo.service';
 
 @Injectable()
 export class MissionsService {
@@ -15,6 +16,7 @@ export class MissionsService {
     private repo: Repository<MissionEntity>,
     private robotsService: RobotsService,
     private pathsService: PathsService,
+    private demoService: DemoService,
   ) {}
 
   async findAll(): Promise<Array<MissionEntity & { agentConfigs: AgentConfig[] | null }>> {
@@ -111,6 +113,15 @@ export class MissionsService {
     const saved = await this.repo.save(run);
 
     const robot = await this.robotsService.findById(template.robotId);
+
+    // Demo robots: launch the chosen agents via the player, not a physical bridge.
+    if (this.demoService.isSimulated(robot)) {
+      const agents = this.parseAgentConfigs(template.agentsJson, template.pathId)
+        .map((a) => a.agentId);
+      await this.demoService.relayStart(agents, template.robotId);
+      return this.toResponse(saved);
+    }
+
     const base = robot.bridgeUrl?.replace(/\/+$/, '');
     if (!base) return this.toResponse(saved);
 
@@ -135,10 +146,16 @@ export class MissionsService {
     const saved = await this.repo.save(mission);
 
     const robot = await this.robotsService.findById(mission.robotId).catch(() => null);
+    if (robot && this.demoService.isSimulated(robot)) {
+      await this.demoService.relayPause();    // pause every active agent
+      return this.toResponse(saved);
+    }
     const base = robot?.bridgeUrl?.replace(/\/+$/, '');
     if (base) {
-      if (this.hasAgent(mission, 'ugv')) {
-        await this.sendToBridge(base, '/commands/mission/command', { agent_id: 'ugv', command: 'PAUSE' });
+      for (const agentId of ['ugv', 'brouette', 'drone'] as const) {
+        if (this.hasAgent(mission, agentId)) {
+          await this.sendToBridge(base, '/commands/mission/command', { agent_id: agentId, command: 'PAUSE' });
+        }
       }
     }
     return this.toResponse(saved);
@@ -153,13 +170,70 @@ export class MissionsService {
     const saved = await this.repo.save(mission);
 
     const robot = await this.robotsService.findById(mission.robotId).catch(() => null);
+    if (robot && this.demoService.isSimulated(robot)) {
+      await this.demoService.relayResume();    // resume every active agent
+      return this.toResponse(saved);
+    }
     const base = robot?.bridgeUrl?.replace(/\/+$/, '');
     if (base) {
-      if (this.hasAgent(mission, 'ugv')) {
-        await this.sendToBridge(base, '/commands/mission/command', { agent_id: 'ugv', command: 'RESUME' });
+      for (const agentId of ['ugv', 'brouette', 'drone'] as const) {
+        if (this.hasAgent(mission, agentId)) {
+          await this.sendToBridge(base, '/commands/mission/command', { agent_id: agentId, command: 'RESUME' });
+        }
       }
     }
     return this.toResponse(saved);
+  }
+
+  async pauseAgent(id: string, agentId: string): Promise<{ ok: boolean }> {
+    const mission = await this.findEntityById(id);
+    if (![MissionStatus.RUNNING, MissionStatus.PAUSED].includes(mission.status)) {
+      throw new BadRequestException('Mission must be RUNNING or PAUSED');
+    }
+    const robot = await this.robotsService.findById(mission.robotId).catch(() => null);
+    if (robot && this.demoService.isSimulated(robot)) {
+      await this.demoService.relayPause();
+      return { ok: true };
+    }
+    const base = robot?.bridgeUrl?.replace(/\/+$/, '');
+    if (base) {
+      await this.sendToBridge(base, '/commands/mission/command', { agent_id: agentId, command: 'PAUSE' });
+    }
+    return { ok: true };
+  }
+
+  async resumeAgent(id: string, agentId: string): Promise<{ ok: boolean }> {
+    const mission = await this.findEntityById(id);
+    if (![MissionStatus.RUNNING, MissionStatus.PAUSED].includes(mission.status)) {
+      throw new BadRequestException('Mission must be RUNNING or PAUSED');
+    }
+    const robot = await this.robotsService.findById(mission.robotId).catch(() => null);
+    if (robot && this.demoService.isSimulated(robot)) {
+      await this.demoService.relayResume();
+      return { ok: true };
+    }
+    const base = robot?.bridgeUrl?.replace(/\/+$/, '');
+    if (base) {
+      await this.sendToBridge(base, '/commands/mission/command', { agent_id: agentId, command: 'RESUME' });
+    }
+    return { ok: true };
+  }
+
+  async cancelAgent(id: string, agentId: string): Promise<{ ok: boolean }> {
+    const mission = await this.findEntityById(id);
+    if (![MissionStatus.RUNNING, MissionStatus.PAUSED].includes(mission.status)) {
+      throw new BadRequestException('Mission must be RUNNING or PAUSED');
+    }
+    const robot = await this.robotsService.findById(mission.robotId).catch(() => null);
+    if (robot && this.demoService.isSimulated(robot)) {
+      await this.demoService.relayPause();  // closest demo equivalent: pause the agent
+      return { ok: true };
+    }
+    const base = robot?.bridgeUrl?.replace(/\/+$/, '');
+    if (base) {
+      await this.sendToBridge(base, '/commands/mission/command', { agent_id: agentId, command: 'CANCEL' });
+    }
+    return { ok: true };
   }
 
   async resumeFromStandby(id: string): Promise<MissionEntity & { agentConfigs: AgentConfig[] | null }> {
@@ -191,6 +265,10 @@ export class MissionsService {
     const saved = await this.repo.save(mission);
 
     const robot = await this.robotsService.findById(mission.robotId).catch(() => null);
+    if (robot && this.demoService.isSimulated(robot)) {
+      await this.demoService.relayStop();
+      return this.toResponse(saved);
+    }
     const base = robot?.bridgeUrl?.replace(/\/+$/, '');
     if (base) {
       await this.sendToBridge(base, '/commands/mode', { type: 'MISSION_UNLOCK' });

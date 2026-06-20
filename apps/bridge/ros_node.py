@@ -50,6 +50,11 @@ try:
     from std_msgs.msg import String, Bool
     from geometry_msgs.msg import Twist
     from nav_msgs.msg import Odometry
+    from faucon_msgs.msg import (
+        MissionCommand, AgentStatus, OrchestratorStatus,
+        SafetyLevel, SystemMode, ModeRequest,
+        MissionProfile, MissionAgent, Waypoint as FauconWaypoint,
+    )
     HAS_ROS = True
 except ImportError:
     HAS_ROS = False
@@ -59,6 +64,76 @@ from config import API_URL, ROBOT_ID
 
 GPS_INTERVAL_S = 2.0
 GPS_MIN_DIST_M = 0.3
+
+# ── faucon_msgs lookup tables (populated after HAS_ROS import) ────────────────
+
+def _build_faucon_maps() -> None:
+    global _AGENT_STATE_NAMES, _ORCH_STATE_NAMES, _MODE_NAMES, _SAFETY_NAMES
+    global _MODE_REQUEST_MAP, _MODE_NAME_TO_UINT, _CMD_MAP
+    if not HAS_ROS:
+        return
+    _AGENT_STATE_NAMES = {
+        AgentStatus.IDLE:      "IDLE",
+        AgentStatus.LOADING:   "LOADING",
+        AgentStatus.READY:     "READY",
+        AgentStatus.RUNNING:   "RUNNING",
+        AgentStatus.PAUSED:    "PAUSED",
+        AgentStatus.COMPLETED: "COMPLETED",
+        AgentStatus.ABORTED:   "ABORTED",
+        AgentStatus.ERROR:     "ERROR",
+    }
+    _ORCH_STATE_NAMES = {
+        OrchestratorStatus.IDLE:      "IDLE",
+        OrchestratorStatus.PENDING:   "PENDING",
+        OrchestratorStatus.RUNNING:   "RUNNING",
+        OrchestratorStatus.PAUSED:    "PAUSED",
+        OrchestratorStatus.COMPLETED: "COMPLETED",
+        OrchestratorStatus.ABORTED:   "ABORTED",
+        OrchestratorStatus.ERROR:     "ERROR",
+    }
+    _MODE_NAMES = {
+        SystemMode.ESTOP:      "ESTOP",
+        SystemMode.STANDBY:    "STANDBY",
+        SystemMode.TELEOP:     "TELEOP",
+        SystemMode.AUTONOMOUS: "AUTONOMOUS",
+    }
+    _SAFETY_NAMES = {
+        SafetyLevel.OK:           "OK",
+        SafetyLevel.NOTIFICATION: "NOTIFICATION",
+        SafetyLevel.WARNING:      "WARNING",
+        SafetyLevel.ERROR:        "ERROR",
+    }
+    _MODE_REQUEST_MAP = {
+        "REQUEST_AUTONOMOUS": ModeRequest.REQUEST_AUTONOMOUS,
+        "REQUEST_AUTO":       ModeRequest.REQUEST_AUTONOMOUS,
+        "REQUEST_TELEOP":     ModeRequest.REQUEST_TELEOP,
+        "MISSION_LOCK":       ModeRequest.MISSION_LOCK,
+        "MISSION_UNLOCK":     ModeRequest.MISSION_UNLOCK,
+        "MISSION_DONE":       ModeRequest.MISSION_DONE,
+    }
+    _MODE_NAME_TO_UINT = {
+        "ESTOP":     SystemMode.ESTOP,
+        "STANDBY":   SystemMode.STANDBY,
+        "TELEOP":    SystemMode.TELEOP,
+        "AUTONOMOUS": SystemMode.AUTONOMOUS,
+    }
+    _CMD_MAP = {
+        "START":           MissionCommand.START,
+        "PAUSE":           MissionCommand.PAUSE,
+        "RESUME":          MissionCommand.RESUME,
+        "CANCEL":          MissionCommand.CANCEL,
+        "CANCEL_BROUETTE": MissionCommand.CANCEL_BROUETTE,
+        "CANCEL_DRONE":    MissionCommand.CANCEL_DRONE,
+    }
+
+_AGENT_STATE_NAMES: dict = {}
+_ORCH_STATE_NAMES:  dict = {}
+_MODE_NAMES:        dict = {}
+_SAFETY_NAMES:      dict = {}
+_MODE_REQUEST_MAP:  dict = {}
+_MODE_NAME_TO_UINT: dict = {}
+_CMD_MAP:           dict = {}
+_build_faucon_maps()
 
 
 # ── Quaternion → Euler ────────────────────────────────────────────────────────
@@ -187,8 +262,8 @@ class TerraRosNode(Node if HAS_ROS else object):  # type: ignore[misc]
         self.create_subscription(Odometry,     "/faucon/robot/odom",    self._on_odom,     qos_profile_sensor_data)
 
         # System
-        self.create_subscription(String, "/faucon/system/mode",   self._on_mode,   10)
-        self.create_subscription(String, "/faucon/system/health", self._on_health, 10)
+        self.create_subscription(SystemMode,  "/faucon/system/mode",   self._on_mode,   10)
+        self.create_subscription(SafetyLevel, "/faucon/system/health", self._on_health, 10)
 
         # Mission UGV — only /mission/status exists in the Faucon stack
         self.create_subscription(String, "/mission/status", self._on_mission_status, 10)
@@ -199,11 +274,11 @@ class TerraRosNode(Node if HAS_ROS else object):  # type: ignore[misc]
         self.create_subscription(NavSatFix, "/faucon/drone/gps",    self._on_drone_gps,    qos_profile_sensor_data)
 
         # Agent mission status
-        self.create_subscription(String, "/faucon/brouette/mission/status", self._on_brouette_mission_status, 10)
-        self.create_subscription(String, "/faucon/drone/mission/status",    self._on_drone_mission_status,    10)
+        self.create_subscription(AgentStatus, "/faucon/brouette/mission/status", self._on_brouette_mission_status, 10)
+        self.create_subscription(AgentStatus, "/faucon/drone/mission/status",    self._on_drone_mission_status,    10)
 
         # Orchestration
-        self.create_subscription(String, "/faucon/orchestration/status", self._on_orch_status, 10)
+        self.create_subscription(OrchestratorStatus, "/faucon/orchestration/status", self._on_orch_status, 10)
 
         # ── Publishers ─────────────────────────────────────────────────
 
@@ -222,24 +297,24 @@ class TerraRosNode(Node if HAS_ROS else object):  # type: ignore[misc]
         self._robot_estop_pub    = self.create_publisher(Bool,  "/faucon/robot/estop",    _reliable)
 
         # Orchestration
-        self._orch_cmd_pub     = self.create_publisher(String, "/faucon/orchestration/command", 10)
-        self._orch_mission_pub = self.create_publisher(String, "/faucon/orchestration/mission", 10)
+        self._orch_cmd_pub     = self.create_publisher(MissionCommand,  "/faucon/orchestration/command", 10)
+        self._orch_mission_pub = self.create_publisher(MissionProfile, "/faucon/orchestration/mission", 10)
 
         # Mode manager — RELIABLE so requests are not dropped
-        self._mode_request_pub = self.create_publisher(String, "/mode_manager/requests", _reliable)
-        self._set_mode_pub     = self.create_publisher(String, "/mission/set_mode",      _reliable)
+        self._mode_request_pub = self.create_publisher(ModeRequest, "/mode_manager/requests", _reliable)
+        self._set_mode_pub     = self.create_publisher(SystemMode,  "/mission/set_mode",      _reliable)
 
         # UGV mission — RELIABLE so CANCEL reaches mission_manager → task_executor
         self._mission_cmd_pub  = self.create_publisher(String, "/mission/command",   _reliable)
         self._mission_load_pub = self.create_publisher(String, "/mission/load_path", 10)
 
         # Brouette mission
-        self._brouette_cmd_pub  = self.create_publisher(String, "/faucon/brouette/mission/command", 10)
-        self._brouette_load_pub = self.create_publisher(String, "/faucon/brouette/mission/load",    10)
+        self._brouette_cmd_pub  = self.create_publisher(MissionCommand, "/faucon/brouette/mission/command", 10)
+        self._brouette_load_pub = self.create_publisher(String,         "/faucon/brouette/mission/load",    10)
 
         # Drone mission
-        self._drone_cmd_pub  = self.create_publisher(String, "/faucon/drone/mission/command", 10)
-        self._drone_load_pub = self.create_publisher(String, "/faucon/drone/mission/load",    10)
+        self._drone_cmd_pub  = self.create_publisher(MissionCommand, "/faucon/drone/mission/command", 10)
+        self._drone_load_pub = self.create_publisher(String,         "/faucon/drone/mission/load",    10)
 
         # ── Timers ─────────────────────────────────────────────────────
         self.create_timer(0.05, self._tick)   # 20 Hz master tick
@@ -277,8 +352,8 @@ class TerraRosNode(Node if HAS_ROS else object):  # type: ignore[misc]
             self._velocity_linear  = round(msg.twist.twist.linear.x,  3)
             self._velocity_angular = round(msg.twist.twist.angular.z, 3)
 
-    def _on_mode(self, msg: "String") -> None:
-        mode = _extract_mode(msg.data)
+    def _on_mode(self, msg: "SystemMode") -> None:
+        mode = _MODE_NAMES.get(msg.mode, "STANDBY")
         with self._lock:
             self._last_ros_rx = time.monotonic()
             self._mode = mode
@@ -286,19 +361,19 @@ class TerraRosNode(Node if HAS_ROS else object):  # type: ignore[misc]
         if mode in {"ESTOP", "EMERGENCY_STOP"}:
             self._halt_for_estop_mode()
 
-    def _on_health(self, msg: "String") -> None:
-        try:
-            data = json.loads(msg.data)
-            with self._lock:
-                self._last_ros_rx = time.monotonic()
-                self._safety = data.get("level", "OK")
-                self._health = {
-                    "level":  data.get("level", "OK"),
-                    "faults": data.get("faults", []),
-                }
-                self._track_report_faults(data)
-        except Exception as exc:
-            self._warn(f"health parse error: {exc}")
+    def _on_health(self, msg: "SafetyLevel") -> None:
+        level_name = _SAFETY_NAMES.get(msg.level, "OK")
+        faults = [] if level_name == "OK" else [{
+            "severity": level_name,
+            "source":   msg.source,
+            "msg":      msg.message,
+        }]
+        health_dict = {"level": level_name, "faults": faults}
+        with self._lock:
+            self._last_ros_rx = time.monotonic()
+            self._safety = level_name
+            self._health = health_dict
+            self._track_report_faults(health_dict)
 
     def _on_load_path(self, msg: "String") -> None:
         name = ""
@@ -355,23 +430,38 @@ class TerraRosNode(Node if HAS_ROS else object):  # type: ignore[misc]
                 self._last_ros_rx = time.monotonic()
                 self._drone_gps = gps
 
-    def _on_brouette_mission_status(self, msg: "String") -> None:
-        try:
-            data = json.loads(msg.data)
-            self._push_agent_status("brouette", data)
-        except Exception as exc:
-            self._warn(f"brouette mission status error: {exc}")
+    def _on_brouette_mission_status(self, msg: "AgentStatus") -> None:
+        data = {
+            "state":           _AGENT_STATE_NAMES.get(msg.state, "IDLE"),
+            "agent_id":        msg.agent_id,
+            "mission_id":      msg.mission_id,
+            "current_wp":      msg.current_wp,
+            "total_wp":        msg.total_wp,
+            "distance_to_wp_m": round(float(msg.distance_to_wp_m), 2),
+        }
+        self._push_agent_status("brouette", data)
 
-    def _on_drone_mission_status(self, msg: "String") -> None:
-        try:
-            data = json.loads(msg.data)
-            self._push_agent_status("drone", data)
-        except Exception as exc:
-            self._warn(f"drone mission status error: {exc}")
+    def _on_drone_mission_status(self, msg: "AgentStatus") -> None:
+        data = {
+            "state":           _AGENT_STATE_NAMES.get(msg.state, "IDLE"),
+            "agent_id":        msg.agent_id,
+            "mission_id":      msg.mission_id,
+            "current_wp":      msg.current_wp,
+            "total_wp":        msg.total_wp,
+            "distance_to_wp_m": round(float(msg.distance_to_wp_m), 2),
+        }
+        self._push_agent_status("drone", data)
 
-    def _on_orch_status(self, msg: "String") -> None:
+    def _on_orch_status(self, msg: "OrchestratorStatus") -> None:
         try:
-            data = json.loads(msg.data)
+            data = {
+                "state":            _ORCH_STATE_NAMES.get(msg.state, "IDLE"),
+                "current_wp":       msg.current_wp,
+                "total_wp":         msg.total_wp,
+                "ugv_paused":       msg.ugv_paused,
+                "brouette_active":  msg.brouette_active,
+                "drone_active":     msg.drone_active,
+            }
             self._http.post("/api/v1/orchestration/status", json=data)
         except Exception as exc:
             self._warn(f"orch status error: {exc}")
@@ -669,10 +759,11 @@ class TerraRosNode(Node if HAS_ROS else object):  # type: ignore[misc]
         self._enqueue_ros_command(lambda: self._publish_mode_request_now(type_str))
 
     def _publish_mode_request_now(self, type_str: str) -> None:
-        msg = String()
-        msg.data = json.dumps({"type": _mode_request_type(type_str)})
+        req_type = _mode_request_type(type_str)
+        msg = ModeRequest()
+        msg.type = _MODE_REQUEST_MAP.get(req_type, ModeRequest.MISSION_LOCK)
         self._mode_request_pub.publish(msg)
-        self._record_command("mode_request", {"type": _mode_request_type(type_str)})
+        self._record_command("mode_request", {"type": req_type})
 
     def publish_set_mode(self, mode: str) -> None:
         if not HAS_ROS:
@@ -680,8 +771,8 @@ class TerraRosNode(Node if HAS_ROS else object):  # type: ignore[misc]
         self._enqueue_ros_command(lambda: self._publish_set_mode_now(mode))
 
     def _publish_set_mode_now(self, mode: str) -> None:
-        msg = String()
-        msg.data = mode
+        msg = SystemMode()
+        msg.mode = _MODE_NAME_TO_UINT.get(mode.upper(), SystemMode.STANDBY)
         self._set_mode_pub.publish(msg)
         self._record_command("set_mode", {"mode": mode})
 
@@ -710,13 +801,13 @@ class TerraRosNode(Node if HAS_ROS else object):  # type: ignore[misc]
                     with self._lock:
                         self._pending_ugv_start = False
                 self._publish_ugv_command(command)
-        if agent_id in ("brouette", "all") and command in {"START", "RESUME", "CANCEL"}:
-            msg = String()
-            msg.data = command
+        if agent_id in ("brouette", "all") and command in {"START", "PAUSE", "RESUME", "CANCEL"}:
+            msg = MissionCommand()
+            msg.cmd = _CMD_MAP.get(command, MissionCommand.CANCEL)
             self._brouette_cmd_pub.publish(msg)
-        if agent_id in ("drone", "all") and command in {"START", "CANCEL"}:
-            msg = String()
-            msg.data = command
+        if agent_id in ("drone", "all") and command in {"START", "PAUSE", "RESUME", "CANCEL"}:
+            msg = MissionCommand()
+            msg.cmd = _CMD_MAP.get(command, MissionCommand.CANCEL)
             self._drone_cmd_pub.publish(msg)
         self._record_command("mission_command", {"agent_id": agent_id, "command": command})
 
@@ -771,8 +862,9 @@ class TerraRosNode(Node if HAS_ROS else object):  # type: ignore[misc]
         self._enqueue_ros_command(lambda: self._publish_orchestration_command_now(command))
 
     def _publish_orchestration_command_now(self, command: str) -> None:
-        msg = String()
-        msg.data = command
+        cmd_upper = command.upper()
+        msg = MissionCommand()
+        msg.cmd = _CMD_MAP.get(cmd_upper, MissionCommand.CANCEL)
         self._orch_cmd_pub.publish(msg)
         self._record_command("orchestration_command", {"command": command})
 
@@ -782,8 +874,19 @@ class TerraRosNode(Node if HAS_ROS else object):  # type: ignore[misc]
         self._enqueue_ros_command(lambda: self._publish_orchestration_mission_now(profile))
 
     def _publish_orchestration_mission_now(self, profile: dict) -> None:
-        msg = String()
-        msg.data = json.dumps(profile)
+        msg = MissionProfile()
+        msg.mission_id = str(profile.get("mission_id", ""))
+        for agent_dict in profile.get("agents", []):
+            agent = MissionAgent()
+            agent.id   = str(agent_dict.get("id", ""))
+            agent.task = str(agent_dict.get("task", ""))
+            for wp_dict in agent_dict.get("waypoints", []):
+                wp = FauconWaypoint()
+                wp.latitude  = float(wp_dict.get("latitude",  0.0))
+                wp.longitude = float(wp_dict.get("longitude", 0.0))
+                wp.altitude  = float(wp_dict.get("altitude",  0.0))
+                agent.waypoints.append(wp)
+            msg.agents.append(agent)
         self._orch_mission_pub.publish(msg)
         self._record_command("orchestration_mission", {"mission_id": profile.get("mission_id")})
 

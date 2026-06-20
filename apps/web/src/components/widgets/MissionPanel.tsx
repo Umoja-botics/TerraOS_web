@@ -13,6 +13,10 @@ import {
   useCancelLoadedMission,
   useCompleteMission,
   useFailMission,
+  useRobots,
+  useDemoAgentControl,
+  useAgentControl,
+  useDemoEstop,
 } from '@/hooks/useApi';
 import { MissionStatus } from '@terra-os/types';
 import type { AgentStatusEvent } from '@terra-os/types';
@@ -67,6 +71,13 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
   const robotMode = useFleetStore((s) => robotId ? ((s.robots[robotId]?.status as unknown as Record<string, unknown>)?.mode as string ?? null) : null);
   const estopActive = robotMode === 'ESTOP' || robotMode === 'EMERGENCY_STOP';
   const uptime  = useUptime(startedAt);
+
+  // Demo (simulated) robots get per-agent pause/resume/e-stop controls.
+  const { data: robotRegistry = [] } = useRobots();
+  const isSimulated = !!robotRegistry.find((r) => r.id === robotId)?.isSimulated;
+  const agentControl = useDemoAgentControl();
+  const realAgentControl = useAgentControl();
+  const demoEstop = useDemoEstop();
 
   // ── Session recovery on mount ────────────────────────────────────────────
   useEffect(() => {
@@ -229,8 +240,12 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
 
           {/* Per-agent rows */}
           {profile.agentIds.map((agentId) => {
-            const st   = agents[agentId] as AgentStatusEvent | undefined;
-            const meta = AGENT_META[agentId] ?? { label: agentId, color: '#888' };
+            const st    = agents[agentId] as AgentStatusEvent | undefined;
+            const meta  = AGENT_META[agentId] ?? { label: agentId, color: '#888' };
+            const aState = agentId === 'ugv' ? ugvState : st?.state;
+            const aborted = aState === 'ABORTED';
+            const paused  = aState === 'PAUSED';
+            const active  = aState === 'RUNNING' || paused;
             return (
               <div key={agentId} className="flex items-center gap-2 text-xs">
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ background: meta.color }} />
@@ -244,15 +259,88 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
                       className="ml-auto font-mono px-1.5 py-0.5 rounded text-[10px]"
                       style={{ color: meta.color, background: meta.color + '18' }}
                     >
-                      {agentId === 'ugv' ? ugvState : st?.state}
+                      {aState}
                     </span>
                   </>
                 ) : (
                   <span className="text-gray-700 ml-auto">—</span>
                 )}
+                {/* Per-agent controls — demo robots use demo API, real robots use mission API */}
+                {isSimulated && (active || aborted) && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    {active && (
+                      <button
+                        title={paused ? 'Reprendre' : 'Pause'}
+                        disabled={agentControl.isPending}
+                        onClick={() => agentControl.mutate({ agentId, action: paused ? 'resume' : 'pause' })}
+                        className="px-1.5 py-0.5 rounded border border-gray-700 text-gray-300 hover:border-gray-500 disabled:opacity-40"
+                      >
+                        {paused ? '▶' : '⏸'}
+                      </button>
+                    )}
+                    <button
+                      title={aborted ? 'Réarmer' : 'E-stop agent'}
+                      disabled={agentControl.isPending}
+                      onClick={() => agentControl.mutate({ agentId, action: 'estop', active: !aborted })}
+                      className={clsx(
+                        'px-1.5 py-0.5 rounded border disabled:opacity-40',
+                        aborted
+                          ? 'border-green-700 text-green-400 hover:border-green-500'
+                          : 'border-red-800 text-red-400 hover:border-red-600',
+                      )}
+                    >
+                      {aborted ? '↺' : '■'}
+                    </button>
+                  </div>
+                )}
+                {!isSimulated && agentId !== 'ugv' && activeId && (active || aborted) && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    {active && (
+                      <button
+                        title={paused ? 'Reprendre' : 'Pause'}
+                        disabled={realAgentControl.isPending}
+                        onClick={() => realAgentControl.mutate({ missionId: activeId, agentId, action: paused ? 'resume' : 'pause' })}
+                        className="px-1.5 py-0.5 rounded border border-gray-700 text-gray-300 hover:border-gray-500 disabled:opacity-40"
+                      >
+                        {paused ? '▶' : '⏸'}
+                      </button>
+                    )}
+                    {active && (
+                      <button
+                        title="Annuler cet agent"
+                        disabled={realAgentControl.isPending}
+                        onClick={() => realAgentControl.mutate({ missionId: activeId, agentId, action: 'cancel' })}
+                        className="px-1.5 py-0.5 rounded border border-red-800 text-red-400 hover:border-red-600 disabled:opacity-40"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
+
+          {/* Global demo E-stop / release */}
+          {isSimulated && (() => {
+            const anyEstopped = profile.agentIds.some(
+              (id) => (agents[id] as AgentStatusEvent | undefined)?.state === 'ABORTED',
+            );
+            return (
+              <button
+                disabled={demoEstop.isPending}
+                onClick={() => demoEstop.mutate(!anyEstopped)}
+                className={clsx(
+                  'w-full text-xs font-bold py-1.5 rounded border disabled:opacity-40 tracking-wider',
+                  anyEstopped
+                    ? 'border-green-700 bg-green-950/40 text-green-400 hover:bg-green-900/40'
+                    : 'border-red-800 bg-red-950/40 text-red-400 hover:bg-red-900/40',
+                )}
+              >
+                {anyEstopped ? '↺ RÉARMER TOUT' : '■ E-STOP — ARRÊT GÉNÉRAL'}
+              </button>
+            );
+          })()}
 
           {/* UGV progress bar */}
           {ugvTotalWp > 0 && (

@@ -1,4 +1,5 @@
 import { useFleetStore } from '@/store/fleetStore';
+import { useRobots } from '@/hooks/useApi';
 import clsx from 'clsx';
 
 const SAFETY_COLOR: Record<string, string> = {
@@ -12,6 +13,8 @@ export function StatusBar() {
   const robots          = useFleetStore((s) => s.robots);
   const selectedId      = useFleetStore((s) => s.selectedRobotId);
   const selectedLive    = selectedId ? robots[selectedId] : null;
+  const { data: registry = [] } = useRobots();
+  const selectedSim     = !!registry.find((r) => r.id === selectedId)?.isSimulated;
 
   const connectedCount  = Object.values(robots).filter((r) => r.status?.connected).length;
   const total           = Object.keys(robots).length;
@@ -54,6 +57,13 @@ export function StatusBar() {
           <span className={clsx(batteryPct < 20 ? 'text-red-400' : batteryPct < 40 ? 'text-yellow-400' : 'text-gray-300')}>
             BAT {batteryPct}%
           </span>
+        </>
+      )}
+
+      {selectedSim && (
+        <>
+          <span className="text-gray-700">|</span>
+          <span className="text-amber-400 font-semibold tracking-wider">⊘ SIMULATION</span>
         </>
       )}
 

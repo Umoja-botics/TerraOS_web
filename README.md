@@ -38,6 +38,33 @@ Web apps for TerraOS.
    - `apps/web/.env` avec `VITE_API_URL=http://localhost:4000` et `VITE_SOCKET_URL=http://localhost:4000`
    - `apps/api/.env` avec `WEB_URL=http://localhost:3001`
 
+## Mode démo (3 robots simulés)
+
+Trois robots simulés (UGV, brouette, drone) jouent un scénario agricole, sans
+ROS2 ni matériel. Deux façons de lancer :
+
+**A. Docker — une commande :**
+```bash
+docker compose -f docker-compose.demo.yml up -d --build
+# → http://localhost:8080
+```
+
+**B. En natif (hot reload, 2 terminaux) :**
+```bash
+# prérequis : pnpm install  &&  pip install -r apps/bridge/requirements.txt
+# active la démo : DEMO_MODE=true dans apps/api/.env
+
+cd apps/bridge && ./launch_demo.sh   # 3 sims + scenario player  (terminal 1)
+pnpm dev                             # api + web                 (terminal 2)
+# → http://localhost:3001
+```
+
+Connexion : `demo-operator@terraos.app` / `demo-operator` (opérateur),
+`demo-admin@terraos.app` / `demo-admin` (panneau démo : injections + reset).
+
+Détails (scénario, comptes, contrôles pause/E-stop, missions personnalisées,
+déploiement VPS) : **[`docs/demo.md`](docs/demo.md)**.
+
 ## Déploiement recommandé
 
 ### Frontend sur Vercel

@@ -155,6 +155,27 @@ export class MissionsController {
     return this.missionsService.loadMission(dto as any);
   }
 
+  @Post(':id/agents/:agentId/pause')
+  @Roles(Role.OPERATOR, Role.ADMIN)
+  @ApiOperation({ summary: 'Pause a single agent without pausing the whole mission' })
+  pauseAgent(@Param('id') id: string, @Param('agentId') agentId: string) {
+    return this.missionsService.pauseAgent(id, agentId);
+  }
+
+  @Post(':id/agents/:agentId/resume')
+  @Roles(Role.OPERATOR, Role.ADMIN)
+  @ApiOperation({ summary: 'Resume a single paused agent' })
+  resumeAgent(@Param('id') id: string, @Param('agentId') agentId: string) {
+    return this.missionsService.resumeAgent(id, agentId);
+  }
+
+  @Post(':id/agents/:agentId/cancel')
+  @Roles(Role.OPERATOR, Role.ADMIN)
+  @ApiOperation({ summary: 'Cancel a single agent individually (mission keeps running)' })
+  cancelAgent(@Param('id') id: string, @Param('agentId') agentId: string) {
+    return this.missionsService.cancelAgent(id, agentId);
+  }
+
   @Post(':id/control')
   @Roles(Role.OPERATOR, Role.ADMIN)
   @ApiOperation({ summary: 'Legacy orchestration command' })

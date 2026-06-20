@@ -272,6 +272,16 @@ export function useDemoReset() {
   });
 }
 
+/** Pause / resume / cancel a single agent on a real (non-demo) robot. */
+export function useAgentControl() {
+  return useMutation({
+    mutationFn: ({ missionId, agentId, action }: { missionId: string; agentId: string; action: 'pause' | 'resume' | 'cancel' }) =>
+      api
+        .post(`/api/v1/missions/${missionId}/agents/${agentId}/${action}`)
+        .then((r) => r.data),
+  });
+}
+
 /** Pause / resume / e-stop a single demo agent (ugv|brouette|drone). */
 export function useDemoAgentControl() {
   return useMutation({

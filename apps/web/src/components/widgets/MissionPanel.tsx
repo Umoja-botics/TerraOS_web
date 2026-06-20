@@ -15,6 +15,7 @@ import {
   useFailMission,
   useRobots,
   useDemoAgentControl,
+  useAgentControl,
   useDemoEstop,
 } from '@/hooks/useApi';
 import { MissionStatus } from '@terra-os/types';
@@ -75,6 +76,7 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
   const { data: robotRegistry = [] } = useRobots();
   const isSimulated = !!robotRegistry.find((r) => r.id === robotId)?.isSimulated;
   const agentControl = useDemoAgentControl();
+  const realAgentControl = useAgentControl();
   const demoEstop = useDemoEstop();
 
   // ── Session recovery on mount ────────────────────────────────────────────
@@ -263,7 +265,7 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
                 ) : (
                   <span className="text-gray-700 ml-auto">—</span>
                 )}
-                {/* Per-agent demo controls */}
+                {/* Per-agent controls — demo robots use demo API, real robots use mission API */}
                 {isSimulated && (active || aborted) && (
                   <div className="flex items-center gap-1 shrink-0">
                     {active && (
@@ -289,6 +291,30 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
                     >
                       {aborted ? '↺' : '■'}
                     </button>
+                  </div>
+                )}
+                {!isSimulated && agentId !== 'ugv' && activeId && (active || aborted) && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    {active && (
+                      <button
+                        title={paused ? 'Reprendre' : 'Pause'}
+                        disabled={realAgentControl.isPending}
+                        onClick={() => realAgentControl.mutate({ missionId: activeId, agentId, action: paused ? 'resume' : 'pause' })}
+                        className="px-1.5 py-0.5 rounded border border-gray-700 text-gray-300 hover:border-gray-500 disabled:opacity-40"
+                      >
+                        {paused ? '▶' : '⏸'}
+                      </button>
+                    )}
+                    {active && (
+                      <button
+                        title="Annuler cet agent"
+                        disabled={realAgentControl.isPending}
+                        onClick={() => realAgentControl.mutate({ missionId: activeId, agentId, action: 'cancel' })}
+                        className="px-1.5 py-0.5 rounded border border-red-800 text-red-400 hover:border-red-600 disabled:opacity-40"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

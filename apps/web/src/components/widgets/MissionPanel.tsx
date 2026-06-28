@@ -107,7 +107,7 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
   // ── Safety transitions from Faucon health ────────────────────────────────
   useEffect(() => {
     if (!health) return;
-    const faultMessage = health.faults.map((f) => f.msg).join(' · ') || health.level;
+    const faultMessage = (health.faults ?? []).map((f) => f.msg).join(' · ') || health.level;
     if (phase === 'RUNNING' && (health.level === 'WARNING' || health.level === 'ERROR')) {
       setPhase('STANDBY');
       setAlarm(faultMessage);

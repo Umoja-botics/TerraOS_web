@@ -2,7 +2,7 @@
 Bridge command endpoints — called by terra-api to send commands to the robot.
 
 POST /commands/teleop                Joystick velocity command
-POST /commands/estop                 Emergency stop (/faucon/ihm/estop)
+POST /commands/estop                 Emergency stop (/terra/ihm/estop)
 POST /commands/mission               Simple mission lifecycle (START/PAUSE/RESUME/CANCEL)
 POST /commands/mission/load          Load mission profile per agent
 POST /commands/mission/command       Send command to specific agent(s)

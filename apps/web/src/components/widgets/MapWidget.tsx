@@ -60,30 +60,83 @@ const AGENT_COLOR: Record<string, string> = {
   drone: '#a78bfa',
 };
 
-// Marker colour by robot type so the three demo robots read apart at a glance.
+// Marker colour by robot type — case-insensitive lookup.
 const TYPE_COLOR: Record<string, string> = {
-  ugv: '#00ff9d',
-  cart: '#ff9a00',
+  ugv:      '#00ff9d',
+  cart:     '#ff9a00',
   brouette: '#ff9a00',
-  drone: '#a78bfa',
+  drone:    '#a78bfa',
 };
 
-// Arrow icon pointing north by default — rotated by IMU yaw.
-// ROS2 yaw is CCW-positive; CSS rotation is CW-positive → negate.
+function typeColor(type: string): string {
+  return TYPE_COLOR[type.toLowerCase()] ?? '#00ff9d';
+}
+
+// ── SVG shapes per agent type ──────────────────────────────────────────────
+
+/** UGV: directional arrow — rotated by IMU yaw to show heading. */
+function svgUgv(color: string, halo: string) {
+  return `<polygon points="16,3 23,23 16,19 9,23" fill="${color}" stroke="#0a0a0a" stroke-width="1.5" stroke-linejoin="round"/>
+          <circle cx="16" cy="16" r="4" fill="${color}" stroke="#0a0a0a" stroke-width="1.5"/>
+          ${halo}`;
+}
+
+/** Drone: quadcopter silhouette — 4 arms + propeller discs at tips + central body. */
+function svgDrone(color: string, halo: string) {
+  return `${halo}
+    <line x1="16" y1="16" x2="7"  y2="7"  stroke="${color}" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="16" y1="16" x2="25" y2="7"  stroke="${color}" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="16" y1="16" x2="7"  y2="25" stroke="${color}" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="16" y1="16" x2="25" y2="25" stroke="${color}" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="7"  cy="7"  r="4" fill="${color}" stroke="#0a0a0a" stroke-width="1.2"/>
+    <circle cx="25" cy="7"  r="4" fill="${color}" stroke="#0a0a0a" stroke-width="1.2"/>
+    <circle cx="7"  cy="25" r="4" fill="${color}" stroke="#0a0a0a" stroke-width="1.2"/>
+    <circle cx="25" cy="25" r="4" fill="${color}" stroke="#0a0a0a" stroke-width="1.2"/>
+    <circle cx="16" cy="16" r="5" fill="${color}" stroke="#0a0a0a" stroke-width="1.5"/>`;
+}
+
+/** Brouette: wheelbarrow — roue + caisse + manche. Static (no yaw). */
+function svgBrouette(color: string, halo: string) {
+  return `${halo}
+    <circle cx="16" cy="26" r="4.5" fill="none" stroke="${color}" stroke-width="2.2"/>
+    <circle cx="16" cy="26" r="1.5" fill="${color}"/>
+    <polygon points="10,11 22,11 20,21 12,21" fill="${color}" stroke="#0a0a0a" stroke-width="1.2" stroke-linejoin="round"/>
+    <line x1="10" y1="11" x2="6"  y2="5" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+    <line x1="22" y1="11" x2="26" y2="5" stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
+}
+
+// Dashed halo for simulated robots.
+function simHalo(color: string) {
+  return `<circle cx="16" cy="16" r="14" fill="none" stroke="${color}" stroke-width="1.5"
+            stroke-dasharray="3 3" opacity="0.8"/>`;
+}
+
+/**
+ * Per-type map marker icon.
+ * UGV rotates with IMU yaw; drone and brouette are static (their yaw isn't meaningful at map scale).
+ */
 function robotIcon(yawRad: number, type: string, simulated: boolean) {
-  const deg = (-yawRad * 180) / Math.PI;
-  const color = TYPE_COLOR[type] ?? '#00ff9d';
-  // Dashed halo distinguishes simulated robots without hurting legibility.
-  const halo = simulated
-    ? `<circle cx="16" cy="16" r="14" fill="none" stroke="${color}" stroke-width="1.5"
-         stroke-dasharray="3 3" opacity="0.8"/>`
-    : '';
+  const color  = typeColor(type);
+  const halo   = simulated ? simHalo(color) : '';
+  const t      = type.toLowerCase();
+
+  let svgBody: string;
+  let rotateDeg = 0;
+
+  if (t === 'drone') {
+    svgBody = svgDrone(color, halo);
+  } else if (t === 'brouette' || t === 'cart') {
+    svgBody = svgBrouette(color, halo);
+  } else {
+    // UGV default: directional arrow
+    rotateDeg = (-yawRad * 180) / Math.PI;
+    svgBody = svgUgv(color, halo);
+  }
+
   return L.divIcon({
-    html: `<div style="width:32px;height:32px;transform:rotate(${deg}deg);transform-origin:center">
+    html: `<div style="width:32px;height:32px;transform:rotate(${rotateDeg}deg);transform-origin:center">
       <svg viewBox="0 0 32 32" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
-        ${halo}
-        <polygon points="16,3 23,23 16,19 9,23" fill="${color}" stroke="#0a0a0a" stroke-width="1.5" stroke-linejoin="round"/>
-        <circle cx="16" cy="16" r="4" fill="${color}" stroke="#0a0a0a" stroke-width="1.5"/>
+        ${svgBody}
       </svg>
     </div>`,
     className: '',
@@ -142,7 +195,7 @@ export function MapWidget({ fleet, selectedRobot, pathWaypoints }: Props) {
         {fleet.map((robot) => {
           const path = robot.live?.telemetry?.path;
           if (!path || path.length < 2) return null;
-          const color = TYPE_COLOR[robot.type] ?? '#00ff9d';
+          const color = typeColor(robot.type);
           return (
             <Polyline
               key={`refpath:${robot.id}`}
@@ -173,6 +226,7 @@ export function MapWidget({ fleet, selectedRobot, pathWaypoints }: Props) {
         {fleet.flatMap((robot) =>
           Object.entries(robot.live?.agentTelemetry ?? {}).map(([agentId, telemetry]) => {
             const pos = telemetry.gps;
+            if (!pos) return null;
             return (
               <Marker key={`${robot.id}:${agentId}`} position={[pos.lat, pos.lon]} icon={agentIcon(agentId)}>
                 <Popup>

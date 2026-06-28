@@ -11,6 +11,7 @@ import type {
 import type { RobotLive } from '@/types/fleet';
 
 const EVENT_LOG_MAX = 100;
+const TELEMETRY_THROTTLE_MS = 100;
 
 export const SIM_ROBOT_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -19,6 +20,8 @@ interface FleetState {
   selectedRobotId: string | null;
   socket: Socket | null;
   simMode: boolean;
+  _lastTelemetryTs: Record<string, number>;
+  _lastStatusTs: Record<string, number>;
   updateStatus:      (event: RobotStatusEvent) => void;
   updateTelemetry:   (event: RobotTelemetryEvent) => void;
   updateMission:     (event: MissionUpdateEvent) => void;
@@ -45,6 +48,8 @@ export const useFleetStore = create<FleetState>()((set, get) => ({
   selectedRobotId: null,
   socket: null,
   simMode: false,
+  _lastTelemetryTs: {},
+  _lastStatusTs: {},
 
   setSocket: (socket) => set({ socket }),
 
@@ -62,10 +67,14 @@ export const useFleetStore = create<FleetState>()((set, get) => ({
     }
   },
 
-  updateStatus: (event) =>
+  updateStatus: (event) => {
+    const now = Date.now();
+    const last = get()._lastStatusTs[event.robotId] ?? 0;
+    if (now - last < TELEMETRY_THROTTLE_MS) return;
     set((s) => {
       const prev = s.robots[event.robotId] ?? empty();
       return {
+        _lastStatusTs: { ...s._lastStatusTs, [event.robotId]: now },
         robots: {
           ...s.robots,
           [event.robotId]: {
@@ -74,9 +83,16 @@ export const useFleetStore = create<FleetState>()((set, get) => ({
           },
         },
       };
-    }),
+    });
+  },
 
-  updateTelemetry: (event) =>
+  updateTelemetry: (event) => {
+    const now = Date.now();
+    const key = event.agentId && event.agentId !== 'ugv'
+      ? `${event.robotId}:${event.agentId}`
+      : event.robotId;
+    const last = get()._lastTelemetryTs[key] ?? 0;
+    if (now - last < TELEMETRY_THROTTLE_MS) return;
     set((s) => {
       const prev = s.robots[event.robotId] ?? empty();
       const mergeTelemetry = (current: RobotTelemetryEvent | null | undefined): RobotTelemetryEvent => ({
@@ -90,6 +106,7 @@ export const useFleetStore = create<FleetState>()((set, get) => ({
       });
       if (event.agentId && event.agentId !== 'ugv') {
         return {
+          _lastTelemetryTs: { ...s._lastTelemetryTs, [key]: now },
           robots: {
             ...s.robots,
             [event.robotId]: {
@@ -103,12 +120,14 @@ export const useFleetStore = create<FleetState>()((set, get) => ({
         };
       }
       return {
+        _lastTelemetryTs: { ...s._lastTelemetryTs, [key]: now },
         robots: {
           ...s.robots,
           [event.robotId]: { ...prev, telemetry: mergeTelemetry(prev.telemetry) },
         },
       };
-    }),
+    });
+  },
 
   updateMission: (event) =>
     set((s) => ({

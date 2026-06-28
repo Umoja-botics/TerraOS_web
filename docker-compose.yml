@@ -33,6 +33,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # Permet au conteneur api d'atteindre les services sur l'hôte
+    # (ex: terra-bridge sur port 8100 lancé par Faucon en network_mode: host).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       DATABASE_URL: postgresql://terraos:${POSTGRES_PASSWORD:-terraos}@postgres:5432/terraos
       TYPEORM_SYNCHRONIZE: "true"

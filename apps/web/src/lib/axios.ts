@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { useAuthStore } from '@/store/authStore';
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:4000',
@@ -14,8 +15,9 @@ api.interceptors.response.use(
   (res) => res,
   (err: unknown) => {
     if (axios.isAxiosError(err) && err.response?.status === 401) {
-      localStorage.removeItem('terra_token');
-      window.location.href = '/login';
+      // Vider le store Zustand + localStorage sans rechargement dur.
+      // ProtectedRoute détecte token=null et redirige vers /login via React Router.
+      useAuthStore.getState().logout();
     }
     return Promise.reject(err);
   },

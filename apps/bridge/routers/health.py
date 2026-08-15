@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 import state
-from config import ROBOT_ID, USE_MQTT
+from config import ROBOT_ID
 
 router = APIRouter(tags=["health"])
 
@@ -11,14 +11,9 @@ def health():
     payload: dict = {
         "status":    "ok" if node_ok else "degraded",
         "robot_id":  ROBOT_ID,
-        "transport": "mqtt" if USE_MQTT else "ros2",
+        "transport": "mqtt",
         "node":      node_ok,
     }
-    if state.node is not None:
-        if hasattr(state.node, "ros_diagnostic"):
-            payload["ros"] = state.node.ros_diagnostic()
-        if hasattr(state.node, "command_snapshot"):
-            payload["commands"] = state.node.command_snapshot()
-    else:
-        payload["ros"] = {"has_ros": False, "last_rx_age": None, "receiving": False}
+    if state.node is not None and hasattr(state.node, "command_snapshot"):
+        payload["commands"] = state.node.command_snapshot()
     return payload

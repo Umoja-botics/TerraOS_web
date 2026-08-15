@@ -3,6 +3,7 @@ import { useFleetStore } from '@/store/fleetStore';
 import { useAuth } from '@/hooks/useAuth';
 import { useMissionStore } from '@/store/missionStore';
 import { RobotMode, Role } from '@terra-os/types';
+import { CircleCheckIcon, RadioTowerIcon, RotateCcwIcon, WifiOffIcon, XIcon } from '@/components/icons';
 
 const RADIUS  = 60;    // px — joystick pad radius
 const KNOB    = 20;    // px — knob radius
@@ -20,10 +21,11 @@ export function JoystickWidget({ robotId, mode }: Props) {
   const { user }    = useAuth();
   const missionPhase = useMissionStore((s) => s.phase);
 
-  // Local flag — activates the joystick immediately on click without waiting
-  // for the bridge to confirm mode=TELEOP via telemetry (which can be delayed)
-  const [localTeleop, setLocalTeleop] = useState(false);
   const [localEstop, setLocalEstop] = useState<boolean | null>(null);
+  const [teleopRequested, setTeleopRequested] = useState(false);
+  const [connected, setConnected] = useState(() => socket?.connected ?? false);
+  const [command, setCommand] = useState({ linear: 0, angular: 0 });
+  const [confirmRelease, setConfirmRelease] = useState(false);
 
   const canvasRef   = useRef<HTMLDivElement>(null);
   const knobRef     = useRef<HTMLDivElement>(null);
@@ -40,17 +42,18 @@ export function JoystickWidget({ robotId, mode }: Props) {
   const isOperator = user?.role === Role.OPERATOR || user?.role === Role.ADMIN;
   const missionBlocking = missionPhase === 'RUNNING' || missionPhase === 'STANDBY';
   const teleopBlocked = estopActive || missionBlocking;
-  const isTeleop = !teleopBlocked && (mode === RobotMode.TELEOP || localTeleop);
+  const isTeleop = connected && !teleopBlocked && mode === RobotMode.TELEOP;
 
   // ── Emit helpers ──────────────────────────────────────────────────────────
 
   const emitTeleop = useCallback(
-    (linear: number, angular: number) => {
+    (linear: number, angular: number, force = false) => {
       if (!socket || !isTeleop) return;
       const now = Date.now();
-      if (now - lastEmit.current < 100) return;
+      if (!force && now - lastEmit.current < 100) return;
       lastEmit.current = now;
       socket.emit('robot:teleop', { robotId, linear, angular });
+      setCommand({ linear, angular });
     },
     [socket, robotId, isTeleop],
   );
@@ -60,7 +63,8 @@ export function JoystickWidget({ robotId, mode }: Props) {
       if (!socket) return;
       socket.emit('robot:estop', { robotId, active });
       setLocalEstop(active);
-      setLocalTeleop(false);
+      setTeleopRequested(false);
+      setConfirmRelease(false);
       activeRef.current = false;
       if (knobRef.current) {
         knobRef.current.style.transform = 'translate(-50%, -50%)';
@@ -77,11 +81,37 @@ export function JoystickWidget({ robotId, mode }: Props) {
     [socket, robotId],
   );
 
+  const emitStop = useCallback(() => {
+    activeRef.current = false;
+    velRef.current = { linear: 0, angular: 0 };
+    setCommand({ linear: 0, angular: 0 });
+    if (knobRef.current) knobRef.current.style.transform = 'translate(-50%, -50%)';
+    if (socket) socket.emit('robot:teleop', { robotId, linear: 0, angular: 0 });
+  }, [robotId, socket]);
+
   useEffect(() => {
-    if (!teleopBlocked || !localTeleop) return;
-    socket?.emit('robot:teleop', { robotId, linear: 0, angular: 0 });
-    setLocalTeleop(false);
-  }, [localTeleop, robotId, socket, teleopBlocked]);
+    if (!socket) return;
+    const onConnect = () => setConnected(true);
+    const onDisconnect = () => { setConnected(false); emitStop(); };
+    setConnected(socket.connected);
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+    };
+  }, [emitStop, socket]);
+
+  useEffect(() => {
+    if (mode === RobotMode.TELEOP) setTeleopRequested(false);
+    if (teleopBlocked) emitStop();
+  }, [emitStop, mode, teleopBlocked]);
+
+  useEffect(() => {
+    if (!teleopRequested) return;
+    const timeout = window.setTimeout(() => setTeleopRequested(false), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [teleopRequested]);
 
   useEffect(() => {
     if (localEstop !== null && actualEstopActive === localEstop) {
@@ -94,7 +124,13 @@ export function JoystickWidget({ robotId, mode }: Props) {
   useEffect(() => {
     if (!isTeleop) return;
 
-    const down = (e: KeyboardEvent) => keysRef.current.add(e.key.toLowerCase());
+    const down = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
+      const key = e.key.toLowerCase();
+      if (['z', 'w', 'q', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) e.preventDefault();
+      keysRef.current.add(key);
+    };
     const up   = (e: KeyboardEvent) => keysRef.current.delete(e.key.toLowerCase());
 
     window.addEventListener('keydown', down);
@@ -121,18 +157,26 @@ export function JoystickWidget({ robotId, mode }: Props) {
       window.removeEventListener('keyup',   up);
       if (intervalRef.current) clearInterval(intervalRef.current);
       keysRef.current.clear();
+      emitStop();
     };
-  }, [isTeleop, emitTeleop]);
+  }, [isTeleop, emitStop, emitTeleop]);
 
   // ── Joystick pointer handlers ─────────────────────────────────────────────
 
   const stop = useCallback(() => {
-    activeRef.current = false;
-    if (knobRef.current) {
-      knobRef.current.style.transform = 'translate(-50%, -50%)';
-    }
-    emitTeleop(0, 0);
-  }, [emitTeleop]);
+    emitStop();
+  }, [emitStop]);
+
+  useEffect(() => {
+    const stopOnBlur = () => emitStop();
+    const stopWhenHidden = () => { if (document.hidden) emitStop(); };
+    window.addEventListener('blur', stopOnBlur);
+    document.addEventListener('visibilitychange', stopWhenHidden);
+    return () => {
+      window.removeEventListener('blur', stopOnBlur);
+      document.removeEventListener('visibilitychange', stopWhenHidden);
+    };
+  }, [emitStop]);
 
   const handleMove = useCallback(
     (clientX: number, clientY: number) => {
@@ -163,7 +207,18 @@ export function JoystickWidget({ robotId, mode }: Props) {
 
   return (
     <div className="card space-y-3">
-      <div className="text-xs text-gray-500 uppercase tracking-wide">Teleop</div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs text-gray-500 uppercase tracking-wide">Teleop</div>
+        {!connected ? (
+          <span className="flex items-center gap-1 text-[10px] font-mono text-red-400"><WifiOffIcon className="w-3 h-3" />HORS LIGNE</span>
+        ) : isTeleop ? (
+          <span className="flex items-center gap-1 text-[10px] font-mono text-green-400"><CircleCheckIcon className="w-3 h-3" />TELEOP CONFIRMÉ</span>
+        ) : teleopRequested ? (
+          <span className="flex items-center gap-1 text-[10px] font-mono text-blue-400"><RadioTowerIcon className="w-3 h-3 animate-pulse" />EN ATTENTE</span>
+        ) : (
+          <span className="flex items-center gap-1 text-[10px] font-mono text-gray-500"><RadioTowerIcon className="w-3 h-3" />PRÊT</span>
+        )}
+      </div>
 
       {/* REQUEST / RELEASE TELEOP */}
       <div className="flex gap-2">
@@ -172,57 +227,59 @@ export function JoystickWidget({ robotId, mode }: Props) {
             onClick={() => {
               if (teleopBlocked) return;
               emitModeRequest('REQUEST_TELEOP');
-              setLocalTeleop(true);
+              setTeleopRequested(true);
             }}
-            disabled={teleopBlocked}
+            disabled={teleopBlocked || teleopRequested || !connected}
             title={teleopBlocked ? 'Mettre la mission en pause avant d\'activer le téléop' : ''}
-            className="flex-1 text-xs py-1.5 border border-brand-700 text-brand-400 rounded-md hover:bg-brand-900/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="flex flex-1 items-center justify-center gap-1.5 text-xs py-1.5 border border-brand-700 text-brand-400 rounded-md hover:bg-brand-900/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
-            ◎ REQUEST TELEOP
+            <RadioTowerIcon className="w-4 h-4" />{teleopRequested ? 'CONFIRMATION…' : 'REQUEST TELEOP'}
           </button>
         ) : (
           <button
-            onClick={() => { socket?.emit('robot:set_mode', { robotId, mode: 'STANDBY' }); setLocalTeleop(false); }}
-            className="flex-1 text-xs py-1.5 border border-yellow-700 text-yellow-400 rounded-md hover:bg-yellow-900/20 transition-colors"
+            onClick={() => { emitStop(); socket?.emit('robot:set_mode', { robotId, mode: 'STANDBY' }); }}
+            className="flex flex-1 items-center justify-center gap-1.5 text-xs py-1.5 border border-yellow-700 text-yellow-400 rounded-md hover:bg-yellow-900/20 transition-colors"
           >
-            ◁ RELEASE TELEOP
+            <RotateCcwIcon className="w-4 h-4" />RELEASE TELEOP
           </button>
         )}
 
         {/* E-STOP — always visible, never disabled */}
         <button
-          onClick={() => emitEstop(!estopActive)}
-          className={`text-xs px-3 py-1.5 rounded-md font-bold transition-colors ${
+          onClick={() => {
+            if (!estopActive) return emitEstop(true);
+            if (!confirmRelease) return setConfirmRelease(true);
+            emitEstop(false);
+          }}
+          className={`flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 rounded-md font-bold transition-colors ${
             estopActive
               ? 'bg-orange-700 hover:bg-orange-600 text-white'
               : 'bg-red-700 hover:bg-red-600 text-white'
           }`}
         >
-          {estopActive ? '↺ RELEASE' : '■ E-STOP'}
+          {estopActive ? <><RotateCcwIcon className="w-4 h-4" />{confirmRelease ? 'CONFIRMER' : 'RELEASE'}</> : <><XIcon className="w-4 h-4" />E-STOP</>}
         </button>
       </div>
 
       {/* Joystick pad */}
       {!isTeleop && (
         <div className="text-xs text-gray-600 font-mono text-center py-1">
-          Mode must be TELEOP to use joystick
+          {!connected ? 'Connexion robot indisponible' : teleopRequested ? 'En attente de confirmation du robot…' : 'Activez le mode TELEOP pour utiliser le joystick'}
         </div>
       )}
 
       <div className="flex justify-center">
         <div
           ref={canvasRef}
-          className={`relative rounded-full border-2 select-none ${
+          className={`relative rounded-full border-2 select-none touch-none ${
             isTeleop ? 'border-brand-600 cursor-crosshair' : 'border-gray-700 opacity-30'
           }`}
           style={{ width: RADIUS * 2, height: RADIUS * 2 }}
-          onMouseDown={(e) => { if (!isTeleop) return; activeRef.current = true; handleMove(e.clientX, e.clientY); }}
-          onMouseMove={(e) => handleMove(e.clientX, e.clientY)}
-          onMouseUp={stop}
-          onMouseLeave={stop}
-          onTouchStart={(e) => { if (!isTeleop) return; activeRef.current = true; const t = e.touches[0]; handleMove(t.clientX, t.clientY); }}
-          onTouchMove={(e) => { const t = e.touches[0]; handleMove(t.clientX, t.clientY); }}
-          onTouchEnd={stop}
+          onPointerDown={(e) => { if (!isTeleop) return; e.currentTarget.setPointerCapture(e.pointerId); activeRef.current = true; handleMove(e.clientX, e.clientY); }}
+          onPointerMove={(e) => handleMove(e.clientX, e.clientY)}
+          onPointerUp={(e) => { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); stop(); }}
+          onPointerCancel={stop}
+          onLostPointerCapture={stop}
         >
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="w-full h-px bg-gray-800" />
@@ -238,6 +295,11 @@ export function JoystickWidget({ robotId, mode }: Props) {
             style={{ width: KNOB * 2, height: KNOB * 2, transform: 'translate(-50%, -50%)' }}
           />
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+        <div className="bg-gray-800/60 rounded px-2 py-1"><span className="text-gray-500">LINEAR </span><span className="text-gray-300">{command.linear.toFixed(2)} m/s</span></div>
+        <div className="bg-gray-800/60 rounded px-2 py-1"><span className="text-gray-500">ANGULAR </span><span className="text-gray-300">{command.angular.toFixed(2)} rad/s</span></div>
       </div>
 
       {/* Keyboard hints */}

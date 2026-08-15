@@ -11,6 +11,13 @@ import type {
 import type { RobotLive } from '@/types/fleet';
 
 const EVENT_LOG_MAX = 100;
+const TELEMETRY_THROTTLE_MS = 100;
+
+function normalizeBattery(value: number | null): number | null {
+  if (value === null || !Number.isFinite(value)) return value;
+  const ratio = value > 1 ? value / 100 : value;
+  return Math.min(1, Math.max(0, ratio));
+}
 
 export const SIM_ROBOT_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -19,6 +26,8 @@ interface FleetState {
   selectedRobotId: string | null;
   socket: Socket | null;
   simMode: boolean;
+  _lastTelemetryTs: Record<string, number>;
+  _lastStatusTs: Record<string, number>;
   updateStatus:      (event: RobotStatusEvent) => void;
   updateTelemetry:   (event: RobotTelemetryEvent) => void;
   updateMission:     (event: MissionUpdateEvent) => void;
@@ -27,6 +36,7 @@ interface FleetState {
   addEvent:          (event: RobotEventPayload) => void;
   selectRobot:       (id: string | null) => void;
   setSocket:         (socket: Socket | null) => void;
+  setSimMode:        (enabled: boolean) => void;
   toggleSimMode:     () => void;
 }
 
@@ -45,8 +55,11 @@ export const useFleetStore = create<FleetState>()((set, get) => ({
   selectedRobotId: null,
   socket: null,
   simMode: false,
+  _lastTelemetryTs: {},
+  _lastStatusTs: {},
 
   setSocket: (socket) => set({ socket }),
+  setSimMode: (enabled) => set({ simMode: enabled }),
 
   toggleSimMode: () => {
     const { simMode, selectedRobotId, socket } = get();
@@ -62,21 +75,36 @@ export const useFleetStore = create<FleetState>()((set, get) => ({
     }
   },
 
-  updateStatus: (event) =>
+  updateStatus: (event) => {
+    const now = Date.now();
+    const last = get()._lastStatusTs[event.robotId] ?? 0;
+    if (now - last < TELEMETRY_THROTTLE_MS) return;
     set((s) => {
       const prev = s.robots[event.robotId] ?? empty();
+      const normalizedEvent = {
+        ...event,
+        battery: normalizeBattery(event.battery),
+      };
       return {
+        _lastStatusTs: { ...s._lastStatusTs, [event.robotId]: now },
         robots: {
           ...s.robots,
           [event.robotId]: {
             ...prev,
-            status: { ...(prev.status ?? {}), ...event },
+            status: { ...(prev.status ?? {}), ...normalizedEvent },
           },
         },
       };
-    }),
+    });
+  },
 
-  updateTelemetry: (event) =>
+  updateTelemetry: (event) => {
+    const now = Date.now();
+    const key = event.agentId && event.agentId !== 'ugv'
+      ? `${event.robotId}:${event.agentId}`
+      : event.robotId;
+    const last = get()._lastTelemetryTs[key] ?? 0;
+    if (now - last < TELEMETRY_THROTTLE_MS) return;
     set((s) => {
       const prev = s.robots[event.robotId] ?? empty();
       const mergeTelemetry = (current: RobotTelemetryEvent | null | undefined): RobotTelemetryEvent => ({
@@ -90,6 +118,7 @@ export const useFleetStore = create<FleetState>()((set, get) => ({
       });
       if (event.agentId && event.agentId !== 'ugv') {
         return {
+          _lastTelemetryTs: { ...s._lastTelemetryTs, [key]: now },
           robots: {
             ...s.robots,
             [event.robotId]: {
@@ -103,12 +132,14 @@ export const useFleetStore = create<FleetState>()((set, get) => ({
         };
       }
       return {
+        _lastTelemetryTs: { ...s._lastTelemetryTs, [key]: now },
         robots: {
           ...s.robots,
           [event.robotId]: { ...prev, telemetry: mergeTelemetry(prev.telemetry) },
         },
       };
-    }),
+    });
+  },
 
   updateMission: (event) =>
     set((s) => ({

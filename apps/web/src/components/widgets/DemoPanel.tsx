@@ -2,6 +2,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useDemoStatus, useDemoInject, useDemoReset } from '@/hooks/useApi';
 import { Role } from '@terra-os/types';
 import clsx from 'clsx';
+import { RefreshCwIcon, TriangleAlertIcon } from '@/components/icons';
 
 // Mirrors the failure_injections in scenarios/demo_agri.yaml.
 const INJECTIONS = [
@@ -51,9 +52,9 @@ export function DemoPanel() {
             title={f.desc}
             disabled={inject.isPending || playerDown}
             onClick={() => inject.mutate(f.id)}
-            className="text-xs px-2 py-1.5 rounded-md border border-orange-500/40 text-orange-300 bg-orange-500/10 hover:bg-orange-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center justify-center gap-1.5 text-xs px-2 py-1.5 rounded-md border border-orange-500/40 text-orange-300 bg-orange-500/10 hover:bg-orange-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            ⚠ {f.label}
+            <TriangleAlertIcon className="w-3.5 h-3.5" />{f.label}
           </button>
         ))}
       </div>
@@ -62,12 +63,12 @@ export function DemoPanel() {
         disabled={reset.isPending}
         onClick={() => reset.mutate()}
         className={clsx(
-          'w-full text-xs px-2 py-1.5 rounded-md border font-mono transition-colors',
+          'w-full flex items-center justify-center gap-1.5 text-xs px-2 py-1.5 rounded-md border font-mono transition-colors',
           'border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white',
           'disabled:opacity-40 disabled:cursor-not-allowed',
         )}
       >
-        {reset.isPending ? 'Réinitialisation…' : '↺ Réinitialiser la démo'}
+        {reset.isPending ? 'Réinitialisation…' : <><RefreshCwIcon className="w-3.5 h-3.5" />Réinitialiser la démo</>}
       </button>
     </div>
   );

@@ -118,7 +118,7 @@ export class TelemetryGateway implements OnGatewayConnection, OnGatewayDisconnec
   @SubscribeMessage('robot:mode_request')
   async handleModeRequest(@MessageBody() cmd: ModeRequestCommand, @ConnectedSocket() client: Socket) {
     if (!(await this.canCommand(client))) return { ok: false, error: 'forbidden' };
-    if (cmd.type === 'REQUEST_TELEOP' && this.isTeleopBlocked(cmd.robotId)) {
+    if (cmd.type === 'REQUEST_TELEOP' && this.isTeleopRequestBlocked(cmd.robotId)) {
       return { ok: false, error: 'teleop_blocked' };
     }
     const base = await this.getBridgeBase(cmd.robotId);
@@ -366,6 +366,11 @@ export class TelemetryGateway implements OnGatewayConnection, OnGatewayDisconnec
   }
 
   private isTeleopBlocked(robotId: string): boolean {
+    const mode = this.robotModes.get(robotId);
+    return this.isTeleopRequestBlocked(robotId) || mode !== 'TELEOP';
+  }
+
+  private isTeleopRequestBlocked(robotId: string): boolean {
     const mode = this.robotModes.get(robotId);
     const missionState = this.missionStates.get(robotId) ?? 'IDLE';
     const missionActive = missionState === 'RUNNING' || missionState === 'STANDBY';

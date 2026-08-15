@@ -8,6 +8,7 @@ import {
   Popup,
 } from 'react-leaflet';
 import L from 'leaflet';
+import { MapIcon, SatelliteIcon, XIcon } from '@/components/icons';
 import 'leaflet/dist/leaflet.css';
 import { useCreatePath, useUpdatePath } from '@/hooks/useApi';
 import { useFleetStore } from '@/store/fleetStore';
@@ -320,7 +321,7 @@ export function PathEditor({ onClose, initialPath, initialCenter = [48.8566, 2.3
                 onClick={() => setTileMode((m) => (m === 'street' ? 'satellite' : 'street'))}
                 className="absolute top-3 right-3 z-[1000] bg-gray-900/90 border border-gray-700 text-xs text-gray-300 px-3 py-1.5 rounded-md hover:bg-gray-800 transition-colors"
               >
-                {tileMode === 'street' ? '🛰 Satellite' : '🗺 Street'}
+                <span className="flex items-center gap-1.5">{tileMode === 'street' ? <><SatelliteIcon className="w-3.5 h-3.5" />Satellite</> : <><MapIcon className="w-3.5 h-3.5" />Street</>}</span>
               </button>
             </div>
 
@@ -382,7 +383,7 @@ export function PathEditor({ onClose, initialPath, initialCenter = [48.8566, 2.3
                       onClick={() => removeWaypoint(i)}
                       className="text-gray-700 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
                     >
-                      ✕
+                      <XIcon className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ))}

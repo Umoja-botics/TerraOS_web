@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useFleet } from '@/hooks/useFleet';
 import { useCreateMission, useLoadMissionProfile, usePaths } from '@/hooks/useApi';
 import { useMissionStore } from '@/store/missionStore';
@@ -12,6 +12,8 @@ import { CameraWidget } from '@/components/widgets/CameraWidget';
 import { HealthWidget } from '@/components/widgets/HealthWidget';
 import { ModeWidget } from '@/components/widgets/ModeWidget';
 import { BatteryWidget } from '@/components/widgets/BatteryWidget';
+import { BatteryFullIcon, EyeIcon, XIcon } from '@/components/icons';
+import { usePresentationStore } from '@/store/presentationStore';
 import { RobotMode } from '@terra-os/types';
 import type { ImuData, Mission } from '@terra-os/types';
 import clsx from 'clsx';
@@ -87,7 +89,7 @@ function StatusBar({
       )}
       {battPct !== null && (
         <span className={clsx('ml-auto', battColor)}>
-          🔋 {battPct}%
+          <span className="inline-flex items-center gap-1"><BatteryFullIcon className="w-3.5 h-3.5" />{battPct}%</span>
         </span>
       )}
     </div>
@@ -104,6 +106,8 @@ export function DashboardPage() {
   const missionPhase = useMissionStore((s) => s.phase);
   const missionProfile = useMissionStore((s) => s.profile);
   const loadFromMission = useMissionStore((s) => s.loadFromMission);
+  const presentation = usePresentationStore((s) => s.active);
+  const setPresentation = usePresentationStore((s) => s.setActive);
   const pathById = useMemo(() => new Map(paths.map((path) => [path.id, path])), [paths]);
   const missionPathWaypoints = useMemo(() => {
     const agentConfigs = missionProfile?.agentConfigs ?? [];
@@ -112,6 +116,30 @@ export function DashboardPage() {
       agentConfigs.find((config) => config.pathId)?.pathId;
     return pathId ? pathById.get(pathId)?.waypoints : undefined;
   }, [missionProfile, pathById]);
+
+  useEffect(() => {
+    const syncFullscreen = () => {
+      if (!document.fullscreenElement && usePresentationStore.getState().active) {
+        setPresentation(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen);
+  }, [setPresentation]);
+
+  const enterPresentation = async () => {
+    setPresentation(true);
+    try {
+      await document.documentElement.requestFullscreen?.();
+    } catch {
+      // CSS presentation mode remains available when native fullscreen is denied.
+    }
+  };
+
+  const exitPresentation = async () => {
+    setPresentation(false);
+    if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined);
+  };
 
   if (isLoading) {
     return <div className="text-gray-500 text-sm">Loading fleet…</div>;
@@ -168,6 +196,24 @@ export function DashboardPage() {
   return (
     <div className="flex flex-col gap-3 h-full">
 
+      {presentation ? (
+        <div className="h-9 shrink-0 flex items-center justify-between border-b border-gray-800 pb-2">
+          <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
+            <EyeIcon className="w-4 h-4 text-brand-500" />
+            MODE PRÉSENTATION
+          </div>
+          <button onClick={exitPresentation} className="flex items-center gap-1.5 text-xs px-2 py-1 border border-gray-700 rounded text-gray-300 hover:bg-gray-800" title="Quitter le mode présentation">
+            <XIcon className="w-3.5 h-3.5" />Quitter
+          </button>
+        </div>
+      ) : (
+        <div className="flex justify-end">
+          <button onClick={enterPresentation} className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-700 rounded-md text-gray-400 hover:text-gray-100 hover:bg-gray-800 transition-colors" title="Afficher la démonstration en plein écran">
+            <EyeIcon className="w-3.5 h-3.5" />Mode présentation
+          </button>
+        </div>
+      )}
+
       {/* ── Robot selector ── */}
       {fleet.length > 1 && (
         <div className="flex gap-1.5 overflow-x-auto">
@@ -192,10 +238,10 @@ export function DashboardPage() {
       )}
 
       {/* ── Main layout: map + right panel ── */}
-      <div className="flex gap-3 flex-1 min-h-0">
+      <div className="flex flex-col xl:flex-row gap-3 flex-1 min-h-0">
 
         {/* Map — left */}
-        <div className="flex-[3] min-w-0 flex flex-col gap-3">
+        <div className="xl:flex-[3] min-w-0 flex flex-col gap-3">
           <Suspense
             fallback={
               <div className="card flex-1 flex items-center justify-center text-gray-500 text-sm">
@@ -209,7 +255,7 @@ export function DashboardPage() {
 
         {/* Right panel */}
         {selectedRobot ? (
-          <div className="flex-[2] min-w-0 flex flex-col gap-3 overflow-y-auto">
+          <div className="xl:flex-[2] min-w-0 flex flex-col gap-3 xl:overflow-y-auto">
             <button
               type="button"
               onClick={openPlanner}
@@ -255,7 +301,7 @@ export function DashboardPage() {
               <HealthWidget health={health} />
 
               <div className="col-span-2">
-                <CameraWidget bridgeUrl={selectedRobot.bridgeUrl ?? null} />
+                <CameraWidget bridgeUrl={selectedRobot.bridgeUrl ?? null} simulated={selectedRobot.isSimulated} />
               </div>
 
             </div>

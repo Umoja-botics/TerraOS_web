@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { useReports, useDeleteReport } from '@/hooks/useApi';
 import type { MissionReport } from '@terra-os/types';
 import 'leaflet/dist/leaflet.css';
+import { TrashIcon, XIcon } from '@/components/icons';
 
 const STATUS_COLOR: Record<string, string> = {
   COMPLETED: 'text-green-400',
@@ -45,7 +46,7 @@ function ReportDetail({ report, onClose }: { report: MissionReport; onClose: () 
             <h2 className="text-lg font-semibold text-gray-100">{report.name ?? 'Mission Report'}</h2>
             <p className="text-xs text-gray-500 font-mono mt-0.5">{report.missionId}</p>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 text-xl leading-none">✕</button>
+          <button onClick={onClose} title="Fermer" className="p-1 text-gray-500 hover:text-gray-300"><XIcon className="w-4 h-4" /></button>
         </div>
 
         {/* Agents pills */}
@@ -236,7 +237,7 @@ export function ReportsPage() {
                       className="text-gray-700 hover:text-red-400 transition-colors px-2"
                       title="Delete report"
                     >
-                      ✕
+                      <TrashIcon className="w-4 h-4" />
                     </button>
                   </td>
                 </tr>

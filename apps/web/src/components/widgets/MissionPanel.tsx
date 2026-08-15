@@ -20,6 +20,7 @@ import {
 } from '@/hooks/useApi';
 import { MissionStatus } from '@terra-os/types';
 import type { AgentStatusEvent } from '@terra-os/types';
+import { PauseIcon, PlayIcon, RotateCcwIcon, TriangleAlertIcon, XIcon } from '@/components/icons';
 
 const AGENT_META: Record<string, { label: string; color: string }> = {
   ugv:      { label: 'UGV',      color: '#00ff9d' },
@@ -86,14 +87,19 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
 
   // Fetch IDLE profiles for this robot
   const { data: allMissions = [] } = useMissions(robotId ?? undefined);
+  const { data: globalMissions = [] } = useMissions();
   const idleProfiles = allMissions.filter((m) => m.status === MissionStatus.IDLE);
+  const activeMission = globalMissions.find(
+    (mission) => mission.status === MissionStatus.RUNNING || mission.status === MissionStatus.PAUSED,
+  );
+  const launchBlocked = !!activeMission;
 
-  // ── Auto-select sim mission when sim mode activates ───────────────────────
+  // Demo robots should open ready to run: this is the main demo happy path.
   useEffect(() => {
-    if (simMode && robotId === SIM_ROBOT_ID && phase === 'IDLE' && idleProfiles.length > 0 && !profile) {
+    if ((isSimulated || (simMode && robotId === SIM_ROBOT_ID)) && phase === 'IDLE' && idleProfiles.length > 0 && !profile) {
       loadFromMission(idleProfiles[0]);
     }
-  }, [simMode, robotId, idleProfiles.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isSimulated, simMode, robotId, idleProfiles.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startMission  = useStartMission();
   const pauseMission  = usePauseMission();
@@ -275,7 +281,7 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
                         onClick={() => agentControl.mutate({ agentId, action: paused ? 'resume' : 'pause' })}
                         className="px-1.5 py-0.5 rounded border border-gray-700 text-gray-300 hover:border-gray-500 disabled:opacity-40"
                       >
-                        {paused ? '▶' : '⏸'}
+                        {paused ? <PlayIcon className="w-3 h-3" /> : <PauseIcon className="w-3 h-3" />}
                       </button>
                     )}
                     <button
@@ -289,7 +295,7 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
                           : 'border-red-800 text-red-400 hover:border-red-600',
                       )}
                     >
-                      {aborted ? '↺' : '■'}
+                      {aborted ? <RotateCcwIcon className="w-3 h-3" /> : <XIcon className="w-3 h-3" />}
                     </button>
                   </div>
                 )}
@@ -302,7 +308,7 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
                         onClick={() => realAgentControl.mutate({ missionId: activeId, agentId, action: paused ? 'resume' : 'pause' })}
                         className="px-1.5 py-0.5 rounded border border-gray-700 text-gray-300 hover:border-gray-500 disabled:opacity-40"
                       >
-                        {paused ? '▶' : '⏸'}
+                        {paused ? <PlayIcon className="w-3 h-3" /> : <PauseIcon className="w-3 h-3" />}
                       </button>
                     )}
                     {active && (
@@ -312,7 +318,7 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
                         onClick={() => realAgentControl.mutate({ missionId: activeId, agentId, action: 'cancel' })}
                         className="px-1.5 py-0.5 rounded border border-red-800 text-red-400 hover:border-red-600 disabled:opacity-40"
                       >
-                        ✕
+                        <XIcon className="w-3 h-3" />
                       </button>
                     )}
                   </div>
@@ -331,13 +337,13 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
                 disabled={demoEstop.isPending}
                 onClick={() => demoEstop.mutate(!anyEstopped)}
                 className={clsx(
-                  'w-full text-xs font-bold py-1.5 rounded border disabled:opacity-40 tracking-wider',
+                  'w-full flex items-center justify-center gap-1.5 text-xs font-bold py-1.5 rounded border disabled:opacity-40 tracking-wider',
                   anyEstopped
                     ? 'border-green-700 bg-green-950/40 text-green-400 hover:bg-green-900/40'
                     : 'border-red-800 bg-red-950/40 text-red-400 hover:bg-red-900/40',
                 )}
               >
-                {anyEstopped ? '↺ RÉARMER TOUT' : '■ E-STOP — ARRÊT GÉNÉRAL'}
+                {anyEstopped ? <><RotateCcwIcon className="w-3.5 h-3.5" />RÉARMER TOUT</> : <><XIcon className="w-3.5 h-3.5" />E-STOP — ARRÊT GÉNÉRAL</>}
               </button>
             );
           })()}
@@ -378,8 +384,8 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
 
       {/* Safety alarm */}
       {['READY', 'PAUSED', 'STANDBY'].includes(phase) && alarmMessage && (
-        <div className="text-xs text-orange-400 bg-orange-900/20 border border-orange-800 rounded px-2 py-1.5">
-          ⚠ {alarmMessage}
+        <div className="flex items-center gap-1.5 text-xs text-orange-400 bg-orange-900/20 border border-orange-800 rounded px-2 py-1.5">
+          <TriangleAlertIcon className="w-3.5 h-3.5" />{alarmMessage}
         </div>
       )}
 
@@ -396,11 +402,11 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
                   },
                 })
               }
-              disabled={startMission.isPending || !!alarmMessage || estopActive}
-              className="btn-primary text-xs py-1.5 disabled:opacity-40"
-              title={alarmMessage ? 'Lever l’alarme avant de lancer' : ''}
+              disabled={startMission.isPending || !!alarmMessage || estopActive || launchBlocked}
+              className="btn-primary flex items-center justify-center gap-1.5 text-xs py-1.5 disabled:opacity-40"
+              title={launchBlocked ? `Mission déjà active : ${activeMission?.name}` : alarmMessage ? 'Lever l’alarme avant de lancer' : ''}
             >
-              ▶ START
+              <PlayIcon className="w-3.5 h-3.5" />START
             </button>
             <button
               onClick={() => {
@@ -408,9 +414,9 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
                 cancelLoadedMission.mutate(profile.id, { onSuccess: reset });
               }}
               disabled={cancelLoadedMission.isPending}
-              className="text-xs py-1.5 border border-red-800 text-red-400 rounded-md hover:bg-red-900/20"
+              className="flex items-center justify-center gap-1.5 text-xs py-1.5 border border-red-800 text-red-400 rounded-md hover:bg-red-900/20"
             >
-              ✕ CANCEL
+              <XIcon className="w-3.5 h-3.5" />CANCEL
             </button>
           </div>
         )}
@@ -422,9 +428,9 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
                 pauseMission.mutate(activeId, { onSuccess: () => setPhase('PAUSED') })
               }
               disabled={pauseMission.isPending}
-              className="btn-secondary text-xs py-1.5 disabled:opacity-40"
+              className="btn-secondary flex items-center justify-center gap-1.5 text-xs py-1.5 disabled:opacity-40"
             >
-              ⏸ PAUSE
+              <PauseIcon className="w-3.5 h-3.5" />PAUSE
             </button>
             <button
               onClick={() =>
@@ -433,9 +439,9 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
                 })
               }
               disabled={abortMission.isPending}
-              className="text-xs py-1.5 border border-red-800 text-red-400 rounded-md hover:bg-red-900/20 disabled:opacity-40"
+              className="flex items-center justify-center gap-1.5 text-xs py-1.5 border border-red-800 text-red-400 rounded-md hover:bg-red-900/20 disabled:opacity-40"
             >
-              ✕ CANCEL
+              <XIcon className="w-3.5 h-3.5" />CANCEL
             </button>
           </div>
         )}
@@ -447,10 +453,10 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
                 resumeMission.mutate(activeId, { onSuccess: () => setPhase('RUNNING') })
               }
               disabled={resumeMission.isPending || !!alarmMessage || estopActive}
-              className="btn-primary text-xs py-1.5 disabled:opacity-40"
+              className="btn-primary flex items-center justify-center gap-1.5 text-xs py-1.5 disabled:opacity-40"
               title={alarmMessage ? 'Lever l’alarme avant de reprendre' : ''}
             >
-              ▶▶ RESUME
+              <PlayIcon className="w-3.5 h-3.5" />RESUME
             </button>
             <button
               onClick={() =>
@@ -459,9 +465,9 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
                 })
               }
               disabled={abortMission.isPending}
-              className="text-xs py-1.5 border border-red-800 text-red-400 rounded-md hover:bg-red-900/20 disabled:opacity-40"
+              className="flex items-center justify-center gap-1.5 text-xs py-1.5 border border-red-800 text-red-400 rounded-md hover:bg-red-900/20 disabled:opacity-40"
             >
-              ✕ CANCEL
+              <XIcon className="w-3.5 h-3.5" />CANCEL
             </button>
           </div>
         )}
@@ -479,10 +485,10 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
                 });
               }}
               disabled={!!alarmMessage || estopActive || !activeId || resumeFromStandby.isPending}
-              className="btn-primary w-full text-xs py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="btn-primary w-full flex items-center justify-center gap-1.5 text-xs py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
               title={alarmMessage ? 'Lever l’alarme avant de reprendre' : ''}
             >
-              ▶ REPRENDRE
+              <PlayIcon className="w-3.5 h-3.5" />REPRENDRE
             </button>
             {activeId && (
               <button
@@ -491,17 +497,17 @@ export function MissionPanel({ robotId, health, velocity, showIdleSelector = tru
                     onSuccess: reset,
                   })
                 }
-                className="w-full text-xs py-1.5 border border-red-800 text-red-400 rounded-md hover:bg-red-900/20"
+                className="w-full flex items-center justify-center gap-1.5 text-xs py-1.5 border border-red-800 text-red-400 rounded-md hover:bg-red-900/20"
               >
-                ✕ CANCEL
+                <XIcon className="w-3.5 h-3.5" />CANCEL
               </button>
             )}
           </div>
         )}
 
         {(phase === 'COMPLETED' || phase === 'ERROR' || phase === 'ABORTED') && (
-          <button onClick={reset} className="btn-secondary w-full text-xs py-1.5">
-            ↺ New mission
+          <button onClick={reset} className="btn-secondary w-full flex items-center justify-center gap-1.5 text-xs py-1.5">
+            <RotateCcwIcon className="w-3.5 h-3.5" />New mission
           </button>
         )}
       </div>

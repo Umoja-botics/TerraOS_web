@@ -1,8 +1,8 @@
-"""Shared mutable state — avoids circular imports between main.py and routers."""
+"""Shared mutable state — évite les imports circulaires entre main.py et routers."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ros_node import TerraRosNode
+    from mqtt_transport import MqttTransport
 
-node: "TerraRosNode | None" = None
+node: "MqttTransport | None" = None

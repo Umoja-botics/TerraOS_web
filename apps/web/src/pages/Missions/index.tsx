@@ -6,6 +6,7 @@ import { useRobots } from '@/hooks/useApi';
 import { MissionStatus } from '@terra-os/types';
 import type { Mission } from '@terra-os/types';
 import { MissionForm } from './MissionForm';
+import { PencilIcon, PlayIcon, PlusIcon, TrashIcon } from '@/components/icons';
 
 // ── Status styling ─────────────────────────────────────────────────────────────
 
@@ -36,9 +37,10 @@ function AgentPill({ agentId }: { agentId: string }) {
   );
 }
 
-function MissionCard({ mission, robotName, onLaunch, onEdit, onDelete }: {
+function MissionCard({ mission, robotName, launchBlocked, onLaunch, onEdit, onDelete }: {
   mission: Mission;
   robotName: string;
+  launchBlocked: boolean;
   onLaunch: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -78,21 +80,25 @@ function MissionCard({ mission, robotName, onLaunch, onEdit, onDelete }: {
           <>
             <button
               onClick={onLaunch}
-              className="flex-1 text-xs py-1.5 bg-brand-700 hover:bg-brand-600 text-white rounded-md transition-colors font-semibold"
+              disabled={launchBlocked}
+              title={launchBlocked ? 'Une mission est déjà en cours' : ''}
+              className="flex flex-1 items-center justify-center gap-1.5 text-xs py-1.5 bg-brand-700 hover:bg-brand-600 text-white rounded-md transition-colors font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Lancer
+              <PlayIcon className="w-3.5 h-3.5" />Lancer
             </button>
             <button
               onClick={onEdit}
-              className="text-xs px-3 py-1.5 border border-gray-700 text-gray-400 rounded-md hover:bg-gray-800 transition-colors"
+              title="Modifier"
+              className="text-xs p-1.5 border border-gray-700 text-gray-400 rounded-md hover:bg-gray-800 transition-colors"
             >
-              Modifier
+              <PencilIcon className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={onDelete}
-              className="text-xs px-3 py-1.5 border border-red-800/50 text-red-400 rounded-md hover:bg-red-900/20 transition-colors"
+              title="Supprimer"
+              className="text-xs p-1.5 border border-red-800/50 text-red-400 rounded-md hover:bg-red-900/20 transition-colors"
             >
-              Supprimer
+              <TrashIcon className="w-3.5 h-3.5" />
             </button>
           </>
         ) : (
@@ -136,6 +142,9 @@ export function MissionsPage() {
   const [filter,     setFilter]     = useState<'all' | 'idle' | 'history'>('all');
 
   const robotMap = Object.fromEntries(robots.map((r) => [r.id, r.name]));
+  const activeMission = missions.find(
+    (mission) => mission.status === MissionStatus.RUNNING || mission.status === MissionStatus.PAUSED,
+  );
 
   const filtered = missions.filter((m) => {
     if (filter === 'idle')    return m.status === MissionStatus.IDLE;
@@ -168,11 +177,18 @@ export function MissionsPage() {
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="btn-primary text-xs px-4 py-1.5"
+          className="btn-primary flex items-center gap-1.5 text-xs px-4 py-1.5"
         >
-          + Nouveau profil
+          <PlusIcon className="w-3.5 h-3.5" />Nouveau profil
         </button>
       </div>
+
+      {/* Filter tabs */}
+      {activeMission && (
+        <div className="border border-green-800 bg-green-950/30 px-3 py-2 rounded-md text-xs text-green-300">
+          Mission active : <span className="font-semibold">{activeMission.name}</span>. Terminez-la ou annulez-la avant d’en lancer une autre.
+        </div>
+      )}
 
       {/* Filter tabs */}
       <div className="flex gap-1 border-b border-gray-800 pb-0">
@@ -209,6 +225,7 @@ export function MissionsPage() {
               key={mission.id}
               mission={mission}
               robotName={robotMap[mission.robotId] ?? mission.robotId}
+              launchBlocked={!!activeMission}
               onLaunch={() => handleLaunch(mission)}
               onEdit={() => setEditing(mission)}
               onDelete={() => handleDelete(mission)}

@@ -4,7 +4,35 @@ import { useAuth } from '@/hooks/useAuth';
 import { LoginPage } from '@/pages/Login';
 
 // Pages chargées lazily pour isoler les erreurs de module
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, Component } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(_err: Error, info: ErrorInfo) {
+    console.error('[Terra] render error:', _err, info);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 32, color: '#f87171', fontFamily: 'monospace' }}>
+          <strong>Une erreur est survenue</strong>
+          <pre style={{ marginTop: 8, fontSize: 12, color: '#9ca3af', whiteSpace: 'pre-wrap' }}>
+            {(this.state.error as Error).message}
+          </pre>
+          <button
+            onClick={() => this.setState({ error: null })}
+            style={{ marginTop: 16, padding: '6px 16px', background: '#374151', color: '#e5e7eb', border: 'none', borderRadius: 6, cursor: 'pointer' }}
+          >
+            Recharger le widget
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 const DashboardPage = lazy(() => import('@/pages/Dashboard').then(m => ({ default: m.DashboardPage })));
 const FleetPage = lazy(() => import('@/pages/Fleet').then(m => ({ default: m.FleetPage })));
 const MissionsPage = lazy(() => import('@/pages/Missions').then(m => ({ default: m.MissionsPage })));
@@ -21,6 +49,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <Suspense fallback={<div style={{ padding: 32, color: '#888' }}>Chargement…</div>}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
@@ -44,5 +73,6 @@ export default function App() {
         </Route>
       </Routes>
     </Suspense>
+    </ErrorBoundary>
   );
 }

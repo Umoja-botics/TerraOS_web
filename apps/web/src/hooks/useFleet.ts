@@ -5,7 +5,7 @@ import { useSocket } from './useSocket';
 
 export function useFleet() {
   const { data: robots = [], isLoading } = useRobots();
-  const { robots: liveState, selectedRobotId, selectRobot } = useFleetStore();
+  const { robots: liveState, selectedRobotId, selectRobot, setSimMode } = useFleetStore();
 
   const robotIds = robots.map((r) => r.id);
   useSocket(robotIds);
@@ -16,6 +16,14 @@ export function useFleet() {
       selectRobot(robots[0].id);
     }
   }, [robots.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selectedRegistryRobot = robots.find((robot) => robot.id === selectedRobotId);
+
+  // The selected robot defines the active operating context on initial load
+  // and whenever the operator switches between simulated and physical robots.
+  useEffect(() => {
+    if (selectedRegistryRobot) setSimMode(selectedRegistryRobot.isSimulated);
+  }, [selectedRobotId, selectedRegistryRobot?.isSimulated, setSimMode]);
 
   const fleet = robots.map((robot) => ({
     ...robot,

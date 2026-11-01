@@ -3,6 +3,8 @@ import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { StatusBar } from './StatusBar';
 import { useFleetStore } from '@/store/fleetStore';
+import { useState } from 'react';
+import { usePresentationStore } from '@/store/presentationStore';
 
 function SimBanner() {
   const toggleSim = useFleetStore((s) => s.toggleSimMode);
@@ -26,17 +28,28 @@ function SimBanner() {
 
 export function Shell() {
   const simMode = useFleetStore((s) => s.simMode);
+  const presentation = usePresentationStore((s) => s.active);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(() => localStorage.getItem('terra-nav-collapsed') === 'true');
+
+  const toggleNav = () => {
+    setNavCollapsed((current) => {
+      const next = !current;
+      localStorage.setItem('terra-nav-collapsed', String(next));
+      return next;
+    });
+  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-950">
-      <Sidebar />
+      {!presentation && <Sidebar collapsed={navCollapsed} mobileOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} onToggle={toggleNav} />}
       <div className="flex flex-col flex-1 overflow-hidden">
-        <TopBar />
-        {simMode && <SimBanner />}
-        <main className="flex-1 overflow-auto p-6">
+        {!presentation && <TopBar onMenuClick={() => setMobileNavOpen(true)} />}
+        {simMode && !presentation && <SimBanner />}
+        <main className={presentation ? 'app-main flex-1 overflow-auto xl:overflow-hidden p-3 bg-gray-950' : 'app-main flex-1 overflow-auto p-3 md:p-6'}>
           <Outlet />
         </main>
-        <StatusBar />
+        {!presentation && <StatusBar />}
       </div>
     </div>
   );

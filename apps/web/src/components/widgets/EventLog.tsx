@@ -1,5 +1,7 @@
 import type { RobotEventPayload } from '@terra-os/types';
 import clsx from 'clsx';
+import type { ReactNode } from 'react';
+import { CircleCheckIcon, NavigationIcon, RouteIcon, TriangleAlertIcon, XIcon } from '@/components/icons';
 
 const TYPE_COLOR: Record<string, string> = {
   mission: 'text-brand-400',
@@ -10,13 +12,13 @@ const TYPE_COLOR: Record<string, string> = {
   system: 'text-gray-500',
 };
 
-const TYPE_PREFIX: Record<string, string> = {
-  mission: '◈',
-  wp: '→',
-  ok: '✓',
-  warn: '⚠',
-  alarm: '✕',
-  system: '·',
+const TYPE_PREFIX: Record<string, ReactNode> = {
+  mission: <RouteIcon className="w-3 h-3" />,
+  wp: <NavigationIcon className="w-3 h-3" />,
+  ok: <CircleCheckIcon className="w-3 h-3" />,
+  warn: <TriangleAlertIcon className="w-3 h-3" />,
+  alarm: <XIcon className="w-3 h-3" />,
+  system: <span>·</span>,
 };
 
 interface Props {
@@ -34,7 +36,7 @@ export function EventLog({ events }: Props) {
           {events.map((ev, i) => (
             <div key={i} className="flex items-start gap-2 py-1.5 border-b border-gray-800/50 last:border-0">
               <span className={clsx('w-3 shrink-0 text-center', TYPE_COLOR[ev.type] ?? 'text-gray-500')}>
-                {TYPE_PREFIX[ev.type] ?? '·'}
+                {TYPE_PREFIX[ev.type] ?? <span>·</span>}
               </span>
               <span className="text-gray-600 shrink-0 text-[10px]">
                 {new Date(ev.timestamp).toLocaleTimeString()}

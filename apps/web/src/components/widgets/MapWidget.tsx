@@ -4,6 +4,7 @@ import type { Robot } from '@terra-os/types';
 import type { RobotLive } from '@/types/fleet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { MapIcon, SatelliteIcon } from '@/components/icons';
 
 const TILE_STREET = {
   url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -60,35 +61,50 @@ const AGENT_COLOR: Record<string, string> = {
   drone: '#a78bfa',
 };
 
-// Marker colour by robot type so the three demo robots read apart at a glance.
+// Marker colour by robot type — case-insensitive lookup.
 const TYPE_COLOR: Record<string, string> = {
-  ugv: '#00ff9d',
-  cart: '#ff9a00',
+  ugv:      '#00ff9d',
+  cart:     '#ff9a00',
   brouette: '#ff9a00',
-  drone: '#a78bfa',
+  drone:    '#a78bfa',
 };
 
-// Arrow icon pointing north by default — rotated by IMU yaw.
-// ROS2 yaw is CCW-positive; CSS rotation is CW-positive → negate.
+const ROBOT_ASSET: Record<string, string> = {
+  ugv: new URL('../../assets/robots/ugv-top.svg', import.meta.url).href,
+  cart: new URL('../../assets/robots/brouette-top.svg', import.meta.url).href,
+  brouette: new URL('../../assets/robots/brouette-top.svg', import.meta.url).href,
+  drone: new URL('../../assets/robots/drone-top.svg', import.meta.url).href,
+};
+
+function typeColor(type: string): string {
+  return TYPE_COLOR[type.toLowerCase()] ?? '#00ff9d';
+}
+
 function robotIcon(yawRad: number, type: string, simulated: boolean) {
-  const deg = (-yawRad * 180) / Math.PI;
-  const color = TYPE_COLOR[type] ?? '#00ff9d';
-  // Dashed halo distinguishes simulated robots without hurting legibility.
-  const halo = simulated
-    ? `<circle cx="16" cy="16" r="14" fill="none" stroke="${color}" stroke-width="1.5"
-         stroke-dasharray="3 3" opacity="0.8"/>`
+  const t = type.toLowerCase();
+  const color = typeColor(t);
+  const asset = ROBOT_ASSET[t] ?? ROBOT_ASSET.ugv;
+  const heading = ((-yawRad * 180) / Math.PI + 360) % 360;
+  const rotateDeg = (-yawRad * 180) / Math.PI;
+  const headingLabel = t === 'ugv'
+    ? `<div style="position:absolute;top:0;left:50%;transform:translateX(-50%);padding:1px 4px;border:1px solid ${color};border-radius:3px;background:#111827e8;color:${color};font:700 8px/12px monospace;white-space:nowrap">CAP ${heading.toFixed(0)}°</div>`
     : '';
+  const headingArrow = t === 'ugv'
+    ? `<div style="position:absolute;top:-7px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:8px solid ${color};filter:drop-shadow(0 0 2px #000)"></div>`
+    : '';
+
   return L.divIcon({
-    html: `<div style="width:32px;height:32px;transform:rotate(${deg}deg);transform-origin:center">
-      <svg viewBox="0 0 32 32" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
-        ${halo}
-        <polygon points="16,3 23,23 16,19 9,23" fill="${color}" stroke="#0a0a0a" stroke-width="1.5" stroke-linejoin="round"/>
-        <circle cx="16" cy="16" r="4" fill="${color}" stroke="#0a0a0a" stroke-width="1.5"/>
-      </svg>
+    html: `<div style="position:relative;width:56px;height:64px">
+      ${headingLabel}
+      <div style="position:absolute;left:8px;top:18px;width:40px;height:40px;transform:rotate(${rotateDeg}deg);transform-origin:center">
+        ${headingArrow}
+        <div style="position:absolute;inset:-3px;border:2px ${simulated ? 'dashed' : 'solid'} ${color};border-radius:50%;box-shadow:0 0 8px ${color}66;background:${color}1a"></div>
+        <img src="${asset}" alt="" style="position:absolute;inset:2px;width:36px;height:36px;object-fit:contain;filter:drop-shadow(0 1px 2px #000)" />
+      </div>
     </div>`,
     className: '',
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
+    iconSize: [56, 64],
+    iconAnchor: [28, 50],
   });
 }
 
@@ -126,7 +142,7 @@ export function MapWidget({ fleet, selectedRobot, pathWaypoints }: Props) {
   const robotsWithGps = fleet.filter((r) => r.live?.telemetry?.gps);
 
   return (
-    <div className="card h-[480px] overflow-hidden p-0 relative">
+    <div className="card h-[360px] md:h-[480px] xl:h-full xl:min-h-[480px] overflow-hidden p-0 relative">
       <MapContainer
         center={center}
         zoom={16}
@@ -142,7 +158,7 @@ export function MapWidget({ fleet, selectedRobot, pathWaypoints }: Props) {
         {fleet.map((robot) => {
           const path = robot.live?.telemetry?.path;
           if (!path || path.length < 2) return null;
-          const color = TYPE_COLOR[robot.type] ?? '#00ff9d';
+          const color = typeColor(robot.type);
           return (
             <Polyline
               key={`refpath:${robot.id}`}
@@ -173,6 +189,12 @@ export function MapWidget({ fleet, selectedRobot, pathWaypoints }: Props) {
         {fleet.flatMap((robot) =>
           Object.entries(robot.live?.agentTelemetry ?? {}).map(([agentId, telemetry]) => {
             const pos = telemetry.gps;
+            if (!pos) return null;
+            const hasDedicatedRobot = fleet.some((candidate) => {
+              const candidateType = candidate.type.toLowerCase();
+              return candidateType === agentId || (agentId === 'brouette' && candidateType === 'cart');
+            });
+            if (hasDedicatedRobot) return null;
             return (
               <Marker key={`${robot.id}:${agentId}`} position={[pos.lat, pos.lon]} icon={agentIcon(agentId)}>
                 <Popup>
@@ -200,12 +222,30 @@ export function MapWidget({ fleet, selectedRobot, pathWaypoints }: Props) {
         )}
       </MapContainer>
 
-      <button
-        onClick={() => setTileMode((m) => (m === 'street' ? 'satellite' : 'street'))}
-        className="absolute top-3 right-3 z-[1000] bg-gray-900/90 border border-gray-700 text-xs text-gray-300 px-3 py-1.5 rounded-md hover:bg-gray-800 transition-colors"
+      <div
+        className="absolute top-3 right-3 z-[1000] flex items-center bg-gray-900/95 border border-gray-700 rounded-md p-0.5 shadow-lg"
+        role="group"
+        aria-label="Fond de carte"
       >
-        {tileMode === 'street' ? '🛰 Satellite' : '🗺 Street'}
-      </button>
+        <button
+          onClick={() => setTileMode('street')}
+          className={`h-7 flex items-center gap-1.5 px-2 rounded text-xs transition-colors ${tileMode === 'street' ? 'bg-gray-700 text-gray-100' : 'text-gray-500 hover:text-gray-200'}`}
+          aria-pressed={tileMode === 'street'}
+          title="Afficher le plan"
+        >
+          <MapIcon className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Plan</span>
+        </button>
+        <button
+          onClick={() => setTileMode('satellite')}
+          className={`h-7 flex items-center gap-1.5 px-2 rounded text-xs transition-colors ${tileMode === 'satellite' ? 'bg-gray-700 text-gray-100' : 'text-gray-500 hover:text-gray-200'}`}
+          aria-pressed={tileMode === 'satellite'}
+          title="Afficher l’imagerie satellite"
+        >
+          <SatelliteIcon className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Satellite</span>
+        </button>
+      </div>
     </div>
   );
 }

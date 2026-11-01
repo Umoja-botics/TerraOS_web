@@ -49,11 +49,11 @@ export function HealthWidget({ health }: Props) {
         )}
       </div>
 
-      {!health || health.faults.length === 0 ? (
+      {!health || (health.faults ?? []).length === 0 ? (
         <div className="text-xs text-gray-600 font-mono">No active faults</div>
       ) : (
         <div className="space-y-0 max-h-36 overflow-y-auto">
-          {health.faults.map((fault, i) => (
+          {(health.faults ?? []).map((fault, i) => (
             <FaultRow key={i} fault={fault} />
           ))}
         </div>

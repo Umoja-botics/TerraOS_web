@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { MissionEntity } from './mission.entity';
 import { MissionStatus, type CreateMissionDto, type AgentConfig, type MissionLoadDto } from '@terra-os/types';
 import { RobotsService } from '../robots/robots.service';
@@ -10,6 +10,7 @@ import { DemoService } from '../demo/demo.service';
 @Injectable()
 export class MissionsService {
   private readonly logger = new Logger(MissionsService.name);
+  private startQueue: Promise<void> = Promise.resolve();
 
   constructor(
     @InjectRepository(MissionEntity)
@@ -70,7 +71,10 @@ export class MissionsService {
   }
 
   async delete(id: string): Promise<{ ok: boolean }> {
-    await this.findEntityById(id);
+    const mission = await this.findEntityById(id);
+    if ([MissionStatus.RUNNING, MissionStatus.PAUSED].includes(mission.status)) {
+      throw new BadRequestException('Une mission active ne peut pas être supprimée');
+    }
     await this.repo.delete(id);
     return { ok: true };
   }
@@ -94,10 +98,15 @@ export class MissionsService {
   }
 
   async start(id: string): Promise<MissionEntity & { agentConfigs: AgentConfig[] | null }> {
+    return this.withStartLock(() => this.startUnlocked(id));
+  }
+
+  private async startUnlocked(id: string): Promise<MissionEntity & { agentConfigs: AgentConfig[] | null }> {
     const template = await this.findEntityById(id);
     if (template.status !== MissionStatus.IDLE) {
       throw new BadRequestException('Mission must be IDLE to start');
     }
+    await this.assertNoActiveMission();
 
     // Clone template as a new run — original stays IDLE so it can be relaunched
     const run = this.repo.create({
@@ -353,6 +362,7 @@ export class MissionsService {
     if (!url) throw new BadRequestException('No orchestrator URL — use /start, /pause, /resume, /abort');
 
     if (command === 'START') {
+      await this.assertNoActiveMission();
       mission.status = MissionStatus.RUNNING;
       mission.startedAt = new Date();
       await this.repo.save(mission);
@@ -387,6 +397,28 @@ export class MissionsService {
   }
 
   // ── Internal helpers ──────────────────────────────────────────────
+
+  private async assertNoActiveMission(): Promise<void> {
+    const active = await this.repo.findOne({
+      where: { status: In([MissionStatus.RUNNING, MissionStatus.PAUSED]) },
+      order: { startedAt: 'DESC' },
+    });
+    if (active) {
+      throw new ConflictException(`La mission « ${active.name} » est déjà active`);
+    }
+  }
+
+  private async withStartLock<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = this.startQueue;
+    let release!: () => void;
+    this.startQueue = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  }
 
   private toResponse(mission: MissionEntity): MissionEntity & { agentConfigs: AgentConfig[] | null } {
     return {

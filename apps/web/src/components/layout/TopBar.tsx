@@ -1,8 +1,21 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useFleetStore } from '@/store/fleetStore';
 import { SafetyLevel } from '@terra-os/types';
+import { LogOutIcon, MenuIcon, TriangleAlertIcon } from '@/components/icons';
+import { useLocation } from 'react-router-dom';
 
-export function TopBar() {
+const PAGE_TITLES: Record<string, string> = {
+  '/dashboard': 'Vue opérationnelle',
+  '/fleet': 'Flotte',
+  '/missions': 'Missions',
+  '/paths': 'Trajectoires',
+  '/reports': 'Rapports',
+  '/plugins': 'Intégrations',
+  '/settings': 'Paramètres',
+};
+
+export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
+  const { pathname } = useLocation();
   const { user, logout } = useAuth();
   const robots    = useFleetStore((s) => s.robots);
   const simMode   = useFleetStore((s) => s.simMode);
@@ -16,9 +29,16 @@ export function TopBar() {
     : SafetyLevel.WARNING;
 
   return (
-    <header className="h-12 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-6">
-      <span className="text-sm text-gray-400 font-mono">Ground Control Station</span>
-      <div className="flex items-center gap-4">
+    <header className={`divider-tech ${simMode ? 'divider-tech--sim' : ''} h-12 shrink-0 bg-gray-900 flex items-center justify-between px-3 md:px-6`}>
+      <div className="flex items-center gap-2">
+        <button onClick={onMenuClick} className="md:hidden p-1 text-gray-400 hover:text-gray-100" title="Navigation" aria-label="Ouvrir la navigation"><MenuIcon className="w-5 h-5" /></button>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-sm text-brand-500 font-semibold font-mono md:hidden">TerraOS</span>
+          <span className="hidden md:inline text-sm text-gray-300 font-medium truncate">{PAGE_TITLES[pathname] ?? 'TerraOS'}</span>
+          <span className="hidden lg:inline text-xs text-gray-600 font-mono">Ground Control Station</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 md:gap-4">
         {hasAlert && !simMode && (
           <span
             className={`text-xs px-2 py-0.5 rounded-full font-mono font-semibold animate-pulse ${
@@ -27,7 +47,7 @@ export function TopBar() {
                 : 'bg-orange-900/50 text-orange-400 border border-orange-800'
             }`}
           >
-            {alertLevel === SafetyLevel.ERROR ? '⚠ FAULT' : '⚠ WARNING'}
+            <span className="inline-flex items-center gap-1"><TriangleAlertIcon className="w-3.5 h-3.5" />{alertLevel === SafetyLevel.ERROR ? 'FAULT' : 'WARNING'}</span>
           </span>
         )}
 
@@ -46,12 +66,12 @@ export function TopBar() {
         </button>
 
         {user && (
-          <span className="text-sm text-gray-300">
+          <span className="hidden lg:inline text-sm text-gray-300">
             {user.name} <span className="text-gray-500 text-xs">({user.role})</span>
           </span>
         )}
-        <button onClick={logout} className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
-          Sign out
+        <button onClick={logout} title="Se déconnecter" className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors">
+          <LogOutIcon className="w-4 h-4" /><span className="hidden sm:inline">Quitter</span>
         </button>
       </div>
     </header>

@@ -1,6 +1,7 @@
 import { useFleetStore } from '@/store/fleetStore';
 import { useRobots } from '@/hooks/useApi';
 import clsx from 'clsx';
+import { RadioTowerIcon } from '@/components/icons';
 
 const SAFETY_COLOR: Record<string, string> = {
   OK:      'text-green-400',
@@ -12,6 +13,7 @@ const SAFETY_COLOR: Record<string, string> = {
 export function StatusBar() {
   const robots          = useFleetStore((s) => s.robots);
   const selectedId      = useFleetStore((s) => s.selectedRobotId);
+  const simMode         = useFleetStore((s) => s.simMode);
   const selectedLive    = selectedId ? robots[selectedId] : null;
   const { data: registry = [] } = useRobots();
   const selectedSim     = !!registry.find((r) => r.id === selectedId)?.isSimulated;
@@ -25,7 +27,7 @@ export function StatusBar() {
   const batteryPct = battery !== null ? Math.round(battery * 100) : null;
 
   return (
-    <footer className="h-8 bg-gray-900 border-t border-gray-800 flex items-center px-6 gap-6 text-xs font-mono text-gray-500">
+    <footer className="divider-status h-8 shrink-0 overflow-hidden bg-gray-900 flex items-center px-3 md:px-6 gap-4 md:gap-6 text-xs font-mono text-gray-500 whitespace-nowrap">
       <span>
         Robots:{' '}
         <span className={clsx(connectedCount > 0 ? 'text-green-400' : 'text-gray-400')}>
@@ -60,14 +62,14 @@ export function StatusBar() {
         </>
       )}
 
-      {selectedSim && (
+      {(simMode || selectedSim) && (
         <>
           <span className="text-gray-700">|</span>
-          <span className="text-amber-400 font-semibold tracking-wider">⊘ SIMULATION</span>
+          <span className="flex items-center gap-1 text-amber-400 font-semibold tracking-wider"><RadioTowerIcon className="w-3.5 h-3.5" />SIMULATION</span>
         </>
       )}
 
-      <span className="ml-auto text-gray-700">TerraOS v0.1.0</span>
+      <span className="ml-auto hidden lg:inline text-gray-700">TerraOS v0.1.0</span>
     </footer>
   );
 }

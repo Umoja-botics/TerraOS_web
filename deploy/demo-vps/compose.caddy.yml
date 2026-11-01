@@ -7,16 +7,32 @@
 # Caddy → web (nginx) → api. The web container is no longer published directly.
 
 services:
+  postgres:
+    restart: unless-stopped
+
   web:
-    ports: []          # only Caddy is exposed to the internet
+    restart: unless-stopped
 
   api:
+    restart: unless-stopped
     environment:
       JWT_SECRET: ${JWT_SECRET:?set a strong JWT_SECRET}
       WEB_URL: https://${DEMO_DOMAIN}
       DEMO_VIEWER_PASSWORD: ${DEMO_VIEWER_PASSWORD:-demo-viewer}
       DEMO_OPERATOR_PASSWORD: ${DEMO_OPERATOR_PASSWORD:-demo-operator}
       DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:?set a strong DEMO_ADMIN_PASSWORD}
+
+  sim-ugv:
+    restart: unless-stopped
+
+  sim-cart:
+    restart: unless-stopped
+
+  sim-drone:
+    restart: unless-stopped
+
+  scenario-player:
+    restart: unless-stopped
 
   caddy:
     image: caddy:2-alpine

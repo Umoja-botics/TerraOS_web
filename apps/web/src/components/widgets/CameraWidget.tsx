@@ -1,13 +1,15 @@
 import { useState, useRef } from 'react';
+import { VideoIcon, XIcon } from '@/components/icons';
 
 type CamStatus = 'NO_SIGNAL' | 'CONNECTING' | 'LIVE' | 'STALE';
 
 interface Props {
   bridgeUrl: string | null;
+  simulated?: boolean;
 }
 
-export function CameraWidget({ bridgeUrl }: Props) {
-  const defaultUrl = bridgeUrl
+export function CameraWidget({ bridgeUrl, simulated = false }: Props) {
+  const defaultUrl = bridgeUrl && !simulated
     ? (() => {
         try {
           const u = new URL(bridgeUrl);
@@ -57,7 +59,7 @@ export function CameraWidget({ bridgeUrl }: Props) {
     <div className="card p-0 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800">
-        <span className="text-xs text-gray-500 uppercase tracking-wide">Camera</span>
+        <span className="flex items-center gap-1.5 text-xs text-gray-500 uppercase tracking-wide"><VideoIcon className="w-3.5 h-3.5" />Camera</span>
         <div className={`flex items-center gap-1.5 text-[10px] font-mono ${statusColor[status]}`}>
           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot[status]}`} />
           {status}
@@ -66,7 +68,12 @@ export function CameraWidget({ bridgeUrl }: Props) {
 
       {/* Video area */}
       <div className="relative bg-black" style={{ aspectRatio: '16/9' }}>
-        {active && mjpegUrl ? (
+        {simulated ? (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-gray-600 font-mono">
+            <span className="text-xs">CAMERA NON SIMULEE</span>
+            <span className="text-[10px] text-gray-700">Flux disponible avec un robot physique</span>
+          </div>
+        ) : active && mjpegUrl ? (
           <img
             src={mjpegUrl}
             alt="Robot camera"
@@ -111,7 +118,7 @@ export function CameraWidget({ bridgeUrl }: Props) {
       </div>
 
       {/* URL input + controls */}
-      <div className="px-3 py-2 border-t border-gray-800 space-y-2">
+      {!simulated && <div className="px-3 py-2 border-t border-gray-800 space-y-2">
         <div className="flex gap-1.5">
           <input
             type="text"
@@ -134,11 +141,11 @@ export function CameraWidget({ bridgeUrl }: Props) {
               onClick={handleStop}
               className="text-[10px] px-2.5 py-1 border border-gray-700 text-gray-400 hover:text-red-400 hover:border-red-800 rounded"
             >
-              ✕
+              <XIcon className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

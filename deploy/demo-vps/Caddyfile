@@ -1,6 +1,11 @@
 # Automatic HTTPS via Let's Encrypt for the demo domain.
 # web (nginx) already proxies /api and /socket.io to the api service.
 {$DEMO_DOMAIN} {
-	encode gzip
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
 	reverse_proxy web:80
 }

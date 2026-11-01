@@ -55,7 +55,8 @@ services:
       dockerfile: docker/Dockerfile.web
     depends_on: [api]
     ports:
-      - "8080:80"
+      # Local demo access. On a VPS, Caddy remains the only public entrypoint.
+      - "127.0.0.1:8080:80"
 
   sim-ugv:
     <<: *sim-build

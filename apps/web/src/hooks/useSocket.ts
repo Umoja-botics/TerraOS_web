@@ -34,7 +34,7 @@ export function useSocket(robotIds: string[]) {
     if (!token) return;
 
     const socket = io(
-      `${import.meta.env.VITE_SOCKET_URL ?? 'http://localhost:4000'}/robots`,
+      `${import.meta.env.VITE_SOCKET_URL ?? window.location.origin}/robots`,
       { auth: { token }, reconnectionDelay: 1000, reconnectionDelayMax: 5000 },
     );
     socketRef.current = socket;

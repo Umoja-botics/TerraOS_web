@@ -2,32 +2,32 @@
 TerraOS ROS2 bridge node — terra-bridge.
 
 Topics souscrits (13) :
-  /faucon/robot/gps                NavSatFix   → telemetry.gps          (200 ms)
-  /faucon/robot/imu                Imu         → telemetry.imu          (100 ms)
-  /faucon/robot/battery            BatteryState→ status.battery         (5 000 ms)
-  /faucon/robot/odom               Odometry    → telemetry.velocity     (100 ms)
-  /faucon/system/mode              String/JSON → status.mode            (event-driven)
-  /faucon/system/health            String/JSON → health                 (1 000 ms)
+  /terra/robot/gps                NavSatFix   → telemetry.gps          (200 ms)
+  /terra/robot/imu                Imu         → telemetry.imu          (100 ms)
+  /terra/robot/battery            BatteryState→ status.battery         (5 000 ms)
+  /terra/robot/odom               Odometry    → telemetry.velocity     (100 ms)
+  /terra/system/mode              String/JSON → status.mode            (event-driven)
+  /terra/system/health            String/JSON → health                 (1 000 ms)
   /mission/status                  String/JSON → telemetry/mission      (event-driven)
-  /faucon/orchestration/status     String/JSON → orchestration/status   (event-driven)
-  /faucon/brouette/gps             NavSatFix   → telemetry agentId=brouette (200 ms)
-  /faucon/drone/gps                NavSatFix   → telemetry agentId=drone    (200 ms)
-  /faucon/brouette/mission/status  String/JSON → agents/brouette/status (event-driven)
-  /faucon/drone/mission/status     String/JSON → agents/drone/status    (event-driven)
+  /terra/orchestration/status     String/JSON → orchestration/status   (event-driven)
+  /terra/brouette/gps             NavSatFix   → telemetry agentId=brouette (200 ms)
+  /terra/drone/gps                NavSatFix   → telemetry agentId=drone    (200 ms)
+  /terra/brouette/mission/status  String/JSON → agents/brouette/status (event-driven)
+  /terra/drone/mission/status     String/JSON → agents/drone/status    (event-driven)
 
 Topics publiés (12) :
   /teleop/ihm/cmd_vel              Twist       ← joystick
-  /faucon/ihm/estop                Bool        ← e-stop
-  /faucon/orchestration/command    String      ← commandes orchestrateur
-  /faucon/orchestration/mission    String      ← profil mission JSON
+  /terra/ihm/estop                Bool        ← e-stop
+  /terra/orchestration/command    String      ← commandes orchestrateur
+  /terra/orchestration/mission    String      ← profil mission JSON
   /mode_manager/requests           String      ← demandes de mode (MISSION_LOCK etc.)
   /mission/set_mode                String      ← forcer le mode (STANDBY etc.)
   /mission/command                 String      ← commande UGV (START/PAUSE/RESUME/CANCEL)
   /mission/load_path               String      ← chargement path UGV (YAML)
-  /faucon/brouette/mission/command String      ← commande Brouette
-  /faucon/brouette/mission/load    String      ← chargement mission Brouette (JSON)
-  /faucon/drone/mission/command    String      ← commande Drone
-  /faucon/drone/mission/load       String      ← chargement mission Drone (JSON)
+  /terra/brouette/mission/command String      ← commande Brouette
+  /terra/brouette/mission/load    String      ← chargement mission Brouette (JSON)
+  /terra/drone/mission/command    String      ← commande Drone
+  /terra/drone/mission/load       String      ← chargement mission Drone (JSON)
 """
 from __future__ import annotations
 
@@ -256,29 +256,29 @@ class TerraRosNode(Node if HAS_ROS else object):  # type: ignore[misc]
         # ── Subscriptions ──────────────────────────────────────────────
 
         # UGV telemetry
-        self.create_subscription(NavSatFix,    "/faucon/robot/gps",     self._on_gps,      qos_profile_sensor_data)
-        self.create_subscription(Imu,          "/faucon/robot/imu",     self._on_imu,      qos_profile_sensor_data)
-        self.create_subscription(BatteryState, "/faucon/robot/battery", self._on_battery,  qos_profile_sensor_data)
-        self.create_subscription(Odometry,     "/faucon/robot/odom",    self._on_odom,     qos_profile_sensor_data)
+        self.create_subscription(NavSatFix,    "/terra/robot/gps",     self._on_gps,      qos_profile_sensor_data)
+        self.create_subscription(Imu,          "/terra/robot/imu",     self._on_imu,      qos_profile_sensor_data)
+        self.create_subscription(BatteryState, "/terra/robot/battery", self._on_battery,  qos_profile_sensor_data)
+        self.create_subscription(Odometry,     "/terra/robot/odom",    self._on_odom,     qos_profile_sensor_data)
 
         # System
-        self.create_subscription(SystemMode,  "/faucon/system/mode",   self._on_mode,   10)
-        self.create_subscription(SafetyLevel, "/faucon/system/health", self._on_health, 10)
+        self.create_subscription(SystemMode,  "/terra/system/mode",   self._on_mode,   10)
+        self.create_subscription(SafetyLevel, "/terra/system/health", self._on_health, 10)
 
         # Mission UGV — only /mission/status exists in the Faucon stack
         self.create_subscription(String, "/mission/status", self._on_mission_status, 10)
         self.create_subscription(String, "/mission/load_path", self._on_load_path, 10)
 
         # Multi-agent GPS
-        self.create_subscription(NavSatFix, "/faucon/brouette/gps", self._on_brouette_gps, qos_profile_sensor_data)
-        self.create_subscription(NavSatFix, "/faucon/drone/gps",    self._on_drone_gps,    qos_profile_sensor_data)
+        self.create_subscription(NavSatFix, "/terra/brouette/gps", self._on_brouette_gps, qos_profile_sensor_data)
+        self.create_subscription(NavSatFix, "/terra/drone/gps",    self._on_drone_gps,    qos_profile_sensor_data)
 
         # Agent mission status
-        self.create_subscription(AgentStatus, "/faucon/brouette/mission/status", self._on_brouette_mission_status, 10)
-        self.create_subscription(AgentStatus, "/faucon/drone/mission/status",    self._on_drone_mission_status,    10)
+        self.create_subscription(AgentStatus, "/terra/brouette/mission/status", self._on_brouette_mission_status, 10)
+        self.create_subscription(AgentStatus, "/terra/drone/mission/status",    self._on_drone_mission_status,    10)
 
         # Orchestration
-        self.create_subscription(OrchestratorStatus, "/faucon/orchestration/status", self._on_orch_status, 10)
+        self.create_subscription(OrchestratorStatus, "/terra/orchestration/status", self._on_orch_status, 10)
 
         # ── Publishers ─────────────────────────────────────────────────
 
@@ -292,13 +292,13 @@ class TerraRosNode(Node if HAS_ROS else object):  # type: ignore[misc]
 
         # Teleop / safety
         self._cmd_vel_pub        = self.create_publisher(Twist, "/teleop/ihm/cmd_vel",    10)
-        self._estop_pub          = self.create_publisher(Bool,  "/faucon/ihm/estop",      _reliable)
+        self._estop_pub          = self.create_publisher(Bool,  "/terra/ihm/estop",      _reliable)
         # Hardware gate in ugv_adapter — triggers immediate zero-vel on /cmd_vel
-        self._robot_estop_pub    = self.create_publisher(Bool,  "/faucon/robot/estop",    _reliable)
+        self._robot_estop_pub    = self.create_publisher(Bool,  "/terra/robot/estop",    _reliable)
 
         # Orchestration
-        self._orch_cmd_pub     = self.create_publisher(MissionCommand,  "/faucon/orchestration/command", 10)
-        self._orch_mission_pub = self.create_publisher(MissionProfile, "/faucon/orchestration/mission", 10)
+        self._orch_cmd_pub     = self.create_publisher(MissionCommand,  "/terra/orchestration/command", 10)
+        self._orch_mission_pub = self.create_publisher(MissionProfile, "/terra/orchestration/mission", 10)
 
         # Mode manager — RELIABLE so requests are not dropped
         self._mode_request_pub = self.create_publisher(ModeRequest, "/mode_manager/requests", _reliable)
@@ -309,12 +309,12 @@ class TerraRosNode(Node if HAS_ROS else object):  # type: ignore[misc]
         self._mission_load_pub = self.create_publisher(String, "/mission/load_path", 10)
 
         # Brouette mission
-        self._brouette_cmd_pub  = self.create_publisher(MissionCommand, "/faucon/brouette/mission/command", 10)
-        self._brouette_load_pub = self.create_publisher(String,         "/faucon/brouette/mission/load",    10)
+        self._brouette_cmd_pub  = self.create_publisher(MissionCommand, "/terra/brouette/mission/command", 10)
+        self._brouette_load_pub = self.create_publisher(String,         "/terra/brouette/mission/load",    10)
 
         # Drone mission
-        self._drone_cmd_pub  = self.create_publisher(MissionCommand, "/faucon/drone/mission/command", 10)
-        self._drone_load_pub = self.create_publisher(String,         "/faucon/drone/mission/load",    10)
+        self._drone_cmd_pub  = self.create_publisher(MissionCommand, "/terra/drone/mission/command", 10)
+        self._drone_load_pub = self.create_publisher(String,         "/terra/drone/mission/load",    10)
 
         # ── Timers ─────────────────────────────────────────────────────
         self.create_timer(0.05, self._tick)   # 20 Hz master tick
